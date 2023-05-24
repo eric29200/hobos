@@ -3,7 +3,7 @@
 DISK=hda.img
 DISK_SIZE=2G
 
-if [[ `basename $PWD` != "nulix" ]]; then
+if [[ `basename $PWD` != "nos" ]]; then
 	echo "This script must be run from main/root directory"
 	exit 1
 fi
@@ -26,33 +26,16 @@ mkdir tmp >& /dev/null
 sudo mount ${LOOP_DEVICE}p1 tmp
 
 # create root folders
-sudo mkdir -p tmp/etc
 sudo mkdir -p tmp/dev
 sudo mkdir -p tmp/proc
 sudo mkdir -p tmp/mnt
 sudo mkdir -p tmp/tmp
-sudo mkdir -p tmp/run
-sudo mkdir -p tmp/var/run
+sudo mkdir -p tmp/bin
+sudo mkdir -p tmp/sbin
 
 # populate disk
-sudo cp -R musl/musl-install/i386-linux-musl/lib tmp/
-sudo cp -R musl/musl-install/i386-linux-musl/share tmp/
-sudo cp -R musl/musl-install/i386-linux-musl/usr tmp/
-sudo cp -R musl/musl-install/i386-linux-musl/etc tmp/
-sudo cp -R musl/musl-install/i386-linux-musl/bin tmp/
-sudo cp -R musl/musl-install/i386-linux-musl/sbin tmp/
-sudo cp -R rootbase/etc/* tmp/etc/
-sudo cp -R rootbase/root tmp/
-
-# remove x86_64 binaries
-sudo rm -f tmp/bin/pkgconf tmp/bin/ar tmp/bin/as tmp/bin/ld tmp/bin/ld.bfd tmp/bin/objdump
-sudo rm -f tmp/bin/objcopy tmp/bin/ranlib tmp/bin/nm tmp/bin/readelf tmp/bin/strip
-
-# create links
-mkdir -p tmp/bin
-sudo ln -s /usr/bin/bash tmp/bin/bash
-sudo ln -s /usr/bin/bash tmp/bin/sh
-sudo ln -s /proc/mounts tmp/etc/mtab
+sudo cp -R usr/build/* tmp/
+sudo cp -R rootbase/* tmp/
 
 # chown root
 sudo chown -R 0:0 tmp/
