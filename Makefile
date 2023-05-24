@@ -15,15 +15,12 @@ run:
 	cp $(KERNEL) iso/boot/
 	grub-mkrescue -o $(ISO) iso
 	./scripts/create_rootfs.sh
-	sudo $(QEMU)								\
+	$(QEMU)									\
 		-m $(MEM_SIZE)							\
 		-serial stdio 							\
 		-boot order=d 							\
 		-cdrom $(ISO) 							\
-		-drive format=raw,file=$(DISK)					\
-		-netdev tap,id=hobos_net					\
-		-device rtl8139,netdev=hobos_net,id=hobos_nic			\
-		-object filter-dump,id=f1,netdev=hobos_net,file=./traffic.pcap
+		-drive format=raw,file=$(DISK)
 
 %:
 	@:

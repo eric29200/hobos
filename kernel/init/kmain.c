@@ -16,7 +16,6 @@
 #include <drivers/pci/pci.h>
 #include <drivers/block/ata.h>
 #include <drivers/video/fb.h>
-#include <drivers/net/rtl8139.h>
 #include <proc/sched.h>
 #include <sys/syscall.h>
 #include <fs/minix_fs.h>
@@ -40,11 +39,6 @@ extern uint32_t kernel_end;
 
 /* grub framebuffer */
 static struct multiboot_tag_framebuffer *tag_fb;
-
-/* static IP address */
-static uint8_t default_ip_address[] = { 192, 168, 1, 100 };
-static uint8_t default_ip_netmask[] = { 255, 255, 255, 0 };
-static uint8_t default_ip_route[] = { 192, 168, 1, 1 };
 
 /*
  * Parse multiboot header.
@@ -156,11 +150,6 @@ static void kinit()
 	printf("[Kernel] Mouse Init\n");
 	if (init_mouse() != 0)
 		printf("[Kernel] Cannot init mouse\n");
-
-	/* init realtek 8139 device */
-	printf("[Kernel] Realtek 8139 card Init\n");
-	if (init_rtl8139(default_ip_address, default_ip_netmask, default_ip_route) != 0)
-		printf("[Kernel] Realtek 8139 card Init error\n");
 
 	/* init ttys */
 	printf("[Kernel] Ttys Init\n");

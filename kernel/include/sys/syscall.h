@@ -5,7 +5,6 @@
 #include <ipc/signal.h>
 #include <sys/utsname.h>
 #include <sys/sysinfo.h>
-#include <net/socket.h>
 #include <proc/sched.h>
 #include <time.h>
 #include <resource.h>
@@ -130,19 +129,6 @@
 #define __NR_prlimit64			340
 #define __NR_renameat2			353
 #define __NR_getrandom			355
-#define __NR_socket			359
-#define __NR_bind			361
-#define __NR_connect			362
-#define __NR_listen			363
-#define __NR_accept			364
-#define __NR_getsockopt			365
-#define __NR_setsockopt			366
-#define __NR_getsockname		367
-#define __NR_getpeername		368
-#define __NR_sendto			369
-#define __NR_recvfrom			371
-#define __NR_recvmsg			372
-#define __NR_shutdown			373
 #define __NR_copy_file_range		377
 #define __NR_statx			383
 #define __NR_clock_gettime64		403
@@ -219,24 +205,14 @@ int sys_sysinfo(struct sysinfo_t *info);
 int sys_rename(const char *oldpath, const char *newpath);
 int sys_renameat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath);
 int sys_renameat2(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, unsigned int flags);
-int sys_socket(int domain, int type, int protocol);
-int sys_sendto(int sockfd, const void *buf, size_t len, int flags, const struct sockaddr *dest_addr, size_t addrlen);
-int sys_recvfrom(int sockfd, void *buf, size_t len, int flags, struct sockaddr *src_addr, size_t addrlen);
-int sys_recvmsg(int sockfd, struct msghdr_t *msg, int flags);
 int sys_poll(struct pollfd_t *fds, size_t nfds, int timeout);
-int sys_bind(int sockfd, const struct sockaddr *addr, size_t addrlen);
 int sys_setitimer(int which, const struct itimerval_t *new_value, struct itimerval_t *old_value);
-int sys_connect(int sockfd, const struct sockaddr *addr, size_t addrlen);
 int sys_llseek(int fd, uint32_t offset_high, uint32_t offset_low, off64_t *result, int whence);
 int sys_fchmod(int fd, mode_t mode);
 int sys_chmod(const char *pathname, mode_t mode);
-int sys_listen(int sockfd, int backlog);
 int sys_select(int nfds, fd_set_t *readfds, fd_set_t *writefds, fd_set_t *exceptfds, struct old_timeval_t *timeout);
 int sys_pselect6(int nfds, fd_set_t *readfds, fd_set_t *writefds, fd_set_t *exceptfds, struct timespec_t *timeout, sigset_t *sigmask);
-int sys_accept(int sockfd, struct sockaddr *addr, size_t addrlen);
 int sys_mknod(const char *pathname, mode_t mode, dev_t dev);
-int sys_getpeername(int sockfd, struct sockaddr *addr, size_t *addrlen);
-int sys_getsockname(int sockfd, struct sockaddr *addr, size_t *addrlen);
 int sys_chown(const char *pathname, uid_t owner, gid_t group);
 int sys_fchown(int fd, uid_t owner, gid_t group);
 int sys_setgroups(size_t size, const gid_t *list);
@@ -268,12 +244,9 @@ int sys_getsid(pid_t pid);
 int sys_setsid();
 int sys_getrusage(int who, struct rusage_t *ru);
 int sys_pause();
-int sys_getsockopt(int sockfd, int level, int optname, void *optval, size_t optlen);
-int sys_setsockopt(int sockfd, int level, int optname, void *optval, size_t optlen);
 int sys_prlimit64(pid_t pid, int resource, struct rlimit64_t *new_limit, struct rlimit64_t *old_limit);
 void *sys_mremap(void *old_address, size_t old_size, size_t new_size, int flags, void *new_address);
 int sys_fadvise64(int fd, off64_t offset, off64_t len, int advice);
-int sys_shutdown(int sockfd, int how);
 int sys_ipc(uint32_t call, int first, int second, int third, void *ptr, int fifth);
 int sys_setresuid(uid_t ruid, uid_t euid, uid_t suid);
 int sys_setresgid(gid_t rgid, gid_t egid, gid_t sgid);
