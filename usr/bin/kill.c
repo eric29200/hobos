@@ -61,7 +61,7 @@ static struct sig sigs[] = {
 static const char *sig2name(int sig)
 {
 	size_t i;
-	
+
 	for (i = 1; i < sizeof(sigs) / sizeof(struct sig); i++)
 		if (sig == sigs[i].sig)
 			return sigs[i].name;
@@ -75,7 +75,7 @@ static const char *sig2name(int sig)
 static int name2sig(const char *name)
 {
 	size_t i;
-	
+
 	for (i = 1; i < sizeof(sigs) / sizeof(struct sig); i++)
 		if (strcasecmp(name, sigs[i].name) == 0)
 			return sigs[i].sig;

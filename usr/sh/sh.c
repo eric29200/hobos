@@ -278,7 +278,7 @@ static int sh_script(const char *filename)
 		perror(filename);
 		return 1;
 	}
-	
+
 	/* execute each line */
 	while ((len = getline(&cmd_line, &n, fp)) > 0) {
 		/* remove last eol */

@@ -658,7 +658,7 @@ static int load_keymap(const char *filename, int fd_console)
 		len = strnlen(buf, BUFSIZ);
 		if (!len)
 			continue;
-		
+
 		/* remove end of line */
 		if (buf[len - 1] == '\n')
 			buf[len - 1] = 0;

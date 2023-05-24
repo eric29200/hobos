@@ -9,6 +9,6 @@ int tcsetattr(int fd, int actions, const struct termios *termios_p)
 		return -1;
 
 	}
-	
+
 	return ioctl(fd, TCSETS + actions, termios_p);
 }
