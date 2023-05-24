@@ -246,7 +246,7 @@ static int sh_interactive()
 		tm = localtime(&t);
 
 		/* print prompt */
-		printf("[%02d:%02d]\33[1m%s\33[0m@%s:\33[1m%s\33[0m> ", tm->tm_hour, tm->tm_min, username, hostname, cwd);
+		printf("[%02d:%02d]\33[1m%s\33[0m@%s:\33[1m%s\33[0m>", tm->tm_hour, tm->tm_min, username, hostname, cwd);
 		fflush(stdout);
 
 		/* get next command */
