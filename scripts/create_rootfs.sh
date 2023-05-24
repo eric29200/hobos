@@ -3,7 +3,7 @@
 DISK=hda.img
 DISK_SIZE=2G
 
-if [[ `basename $PWD` != "nos" ]]; then
+if [[ `basename $PWD` != "hobos" ]]; then
 	echo "This script must be run from main/root directory"
 	exit 1
 fi

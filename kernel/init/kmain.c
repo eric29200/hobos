@@ -199,7 +199,7 @@ static void kinit()
 }
 
 /*
- * Main nulix function.
+ * Main function.
  */
 int kmain(unsigned long magic, unsigned long addr)
 {

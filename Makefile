@@ -1,5 +1,5 @@
 KERNEL		= kernel/kernel.bin
-ISO		= nulix.iso
+ISO		= hobos.iso
 NJOBS		= $(shell nproc)
 MEM_SIZE	= 512M
 DISK		= hda.img
@@ -21,9 +21,9 @@ run:
 		-boot order=d 							\
 		-cdrom $(ISO) 							\
 		-drive format=raw,file=$(DISK)					\
-		-netdev tap,id=nulix_net					\
-		-device rtl8139,netdev=nulix_net,id=nulix_nic			\
-		-object filter-dump,id=f1,netdev=nulix_net,file=./traffic.pcap
+		-netdev tap,id=hobos_net					\
+		-device rtl8139,netdev=hobos_net,id=hobos_nic			\
+		-object filter-dump,id=f1,netdev=hobos_net,file=./traffic.pcap
 
 %:
 	@:
