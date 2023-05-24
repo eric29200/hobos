@@ -238,6 +238,7 @@ static int sh_interactive()
 
 	for (;;) {
 		/* get current working directory */
+		memset(cwd, 0, PATH_MAX);
 		getcwd(cwd, PATH_MAX);
 
 		/* get current time */
