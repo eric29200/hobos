@@ -4,7 +4,42 @@
 #include <fcntl.h>
 #include <sys/wait.h>
 
+#define RC_PATH		"/etc/rc.conf"
 #define NTTYS		4
+
+/*
+ * Execute startup script rc.conf.
+ */
+static int exec_rc()
+{
+	pid_t pid, ret;
+
+	/* create new process */
+	pid = fork();
+	if (pid < 0) {
+		perror(RC_PATH);
+		return 1;
+	}
+
+	/* child : execute rc.conf */
+	if (pid == 0) {
+		execl("/bin/sh", "sh", RC_PATH, NULL, NULL);
+		exit(0);
+	}
+
+	/* wait for child */
+	for (;;) {
+		ret = waitpid(pid, NULL, 0);
+		if (ret == pid)
+			break;
+		if (ret < 0) {
+			perror("waitpid");
+			return 1;
+		}
+	}
+
+	return 0;
+}
 
 /*
  * Spwan a shell on tty.
@@ -57,6 +92,9 @@ int main(void)
 
 	/* go to root dir */
 	chdir("/");
+
+	/* execute startup script */
+	exec_rc();
 
 	/* spawn a shell on each tty */
 	for (i = 0; i < NTTYS; i++)
