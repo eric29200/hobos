@@ -67,11 +67,9 @@
 #define __NR_wait4			114
 #define __NR_sysinfo			116
 #define __NR_ipc			117
-#define __NR_fsync			118
 #define __NR_sigreturn			119
 #define __NR_clone			120
 #define __NR_uname			122
-#define __NR_mprotect			125
 #define __NR_sigprocmask		126
 #define __NR_getpgid			132
 #define __NR_fchdir			133
@@ -98,20 +96,15 @@
 #define __NR_getgid32			200
 #define __NR_geteuid32			201
 #define __NR_getegid32			202
-#define __NR_setgroups32		206
 #define __NR_fchown32			207
-#define __NR_setresuid			208
-#define __NR_setresgid			210
 #define __NR_chown32			212
 #define __NR_setuid32			213
 #define __NR_setgid32			214
-#define __NR_madvise			219
 #define __NR_getdents64			220
 #define __NR_fcntl64			221
 #define __NR_exit_group			252
 #define __NR_statfs64			268
 #define __NR_fstatfs64			269
-#define __NR_fadvise64			272
 #define __NR_openat			295
 #define __NR_mkdirat			296
 #define __NR_fchownat			298
@@ -129,7 +122,6 @@
 #define __NR_prlimit64			340
 #define __NR_renameat2			353
 #define __NR_getrandom			355
-#define __NR_copy_file_range		377
 #define __NR_statx			383
 #define __NR_clock_gettime64		403
 #define __NR_faccessat2			439
@@ -215,7 +207,6 @@ int sys_pselect6(int nfds, fd_set_t *readfds, fd_set_t *writefds, fd_set_t *exce
 int sys_mknod(const char *pathname, mode_t mode, dev_t dev);
 int sys_chown(const char *pathname, uid_t owner, gid_t group);
 int sys_fchown(int fd, uid_t owner, gid_t group);
-int sys_setgroups(size_t size, const gid_t *list);
 int sys_truncate64(const char *path, off64_t length);
 int sys_ftruncate64(int fd, off64_t length);
 int sys_utimensat(int dirfd, const char *pathname, struct timespec_t *times, int flags);
@@ -228,17 +219,13 @@ int sys_statfs64(const char *path, size_t size, struct statfs64_t *buf);
 int sys_fstatfs64(int fd, struct statfs64_t *buf);
 int sys_fchmodat(int dirfd, const char *pathname, mode_t mode, unsigned int flags);
 int sys_fchownat(int dirfd, const char *pathname, uid_t owner, gid_t group, unsigned int flags);
-int sys_copy_file_range(int fd_in, off64_t *off_in, int fd_out, off64_t *off_out, size_t len, unsigned int flags);
 int sys_stat64(const char *pathname, struct stat64_t *statbuf);
 int sys_lstat64(const char *pathname, struct stat64_t *statbuf);
 int sys_fstat64(int fd, struct stat64_t *statbuf);
 int sys_fstatat64(int dirfd, const char *pathname, struct stat64_t *statbuf, int flags);
-int sys_fsync(int fd);
 int sys_fchdir(int fd);
-int sys_madvise(void *addr, size_t length, int advice);
 int sys_clone(uint32_t flags, uint32_t newsp);
 int sys_getrandom(void *buf, size_t buflen, unsigned int flags);
-int sys_mprotect(void *addr, size_t len, int prot);
 int sys_pread64(int fd, void *buf, size_t count, off64_t offset);
 int sys_getsid(pid_t pid);
 int sys_setsid();
@@ -246,9 +233,6 @@ int sys_getrusage(int who, struct rusage_t *ru);
 int sys_pause();
 int sys_prlimit64(pid_t pid, int resource, struct rlimit64_t *new_limit, struct rlimit64_t *old_limit);
 void *sys_mremap(void *old_address, size_t old_size, size_t new_size, int flags, void *new_address);
-int sys_fadvise64(int fd, off64_t offset, off64_t len, int advice);
 int sys_ipc(uint32_t call, int first, int second, int third, void *ptr, int fifth);
-int sys_setresuid(uid_t ruid, uid_t euid, uid_t suid);
-int sys_setresgid(gid_t rgid, gid_t egid, gid_t sgid);
 
 #endif
