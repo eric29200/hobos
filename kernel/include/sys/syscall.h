@@ -7,7 +7,6 @@
 #include <sys/sysinfo.h>
 #include <net/socket.h>
 #include <proc/sched.h>
-#include <x86/tls.h>
 #include <time.h>
 #include <resource.h>
 #include <uio.h>
@@ -73,7 +72,6 @@
 #define __NR_sigreturn			119
 #define __NR_clone			120
 #define __NR_uname			122
-#define __NR_modify_ldt			123
 #define __NR_mprotect			125
 #define __NR_sigprocmask		126
 #define __NR_getpgid			132
@@ -111,11 +109,7 @@
 #define __NR_madvise			219
 #define __NR_getdents64			220
 #define __NR_fcntl64			221
-#define __NR_gettid			224
-#define __NR_set_thread_area		243
-#define __NR_get_thread_area		244
 #define __NR_exit_group			252
-#define __NR_set_tid_address		258
 #define __NR_statfs64			268
 #define __NR_fstatfs64			269
 #define __NR_fadvise64			272
@@ -208,11 +202,6 @@ mode_t sys_umask(mode_t mask);
 void *sys_mmap(void *addr, size_t length, int prot, int flags, int fd, off64_t offset);
 void *sys_mmap2(void *addr, size_t length, int prot, int flags, int fd, off64_t pgoffset);
 int sys_munmap(void *addr, size_t length);
-int sys_modify_ldt(int func, void *ptr, unsigned long bytecount);
-pid_t sys_gettid();
-int sys_get_thread_area(struct user_desc_t *u_info);
-int sys_set_thread_area(struct user_desc_t *u_info);
-pid_t sys_set_tid_address(int *tidptr);
 void sys_exit_group(int status);
 int sys_mkdirat(int dirfd, const char *pathname, mode_t mode);
 int sys_linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags);

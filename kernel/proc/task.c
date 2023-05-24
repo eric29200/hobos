@@ -487,14 +487,11 @@ static struct task_t *create_task(struct task_t *parent, uint32_t clone_flags, u
 	INIT_LIST_HEAD(&task->list);
 	INIT_LIST_HEAD(&task->sig_tm.list);
 
-	/* copy task name and TLS */
-	if (parent) {
+	/* copy task name */
+	if (parent)
 		memcpy(task->name, parent->name, TASK_NAME_LEN);
-		memcpy(&task->tls, &parent->tls, sizeof(struct user_desc_t));
-	} else {
+	else
 		memset(task->name, 0, TASK_NAME_LEN);
-		memset(&task->tls, 0, sizeof(struct user_desc_t));
-	}
 
 	/* copy task */
 	if (task_copy_flags(task, parent, clone_flags))

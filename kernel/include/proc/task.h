@@ -7,7 +7,6 @@
 #include <fs/fs.h>
 #include <ipc/signal.h>
 #include <lib/list.h>
-#include <x86/tls.h>
 #include <resource.h>
 #include <stddef.h>
 
@@ -102,7 +101,6 @@ struct task_t {
 	struct rlimit_t			rlim[RLIM_NLIMITS];		/* resource limits */
 	struct registers_t		user_regs;			/* saved registers at syscall entry */
 	struct registers_t		signal_regs;			/* saved registers at signal entry */
-	struct user_desc_t		tls;				/* Thread Local Storage address */
 	struct timer_event_t		sig_tm;				/* signal timer */
 	struct wait_queue_t *		wait_child_exit;		/* wait queue for child exit */
 	struct fs_struct *		fs;				/* file system stuff */
