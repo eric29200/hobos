@@ -530,7 +530,10 @@ static int proc_base_lookup(struct inode_t *dir, const char *name, size_t name_l
 	}
 
 	/* create a fake inode */
-	ino = dir->i_ino - PROC_PID_INO + de->ino;
+	if (de->ino == 1)
+		ino = 1;
+	else
+		ino = dir->i_ino - PROC_PID_INO + de->ino;
 
 	/* get inode */
 	*res_inode = iget(dir->i_sb, ino);
