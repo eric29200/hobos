@@ -317,9 +317,6 @@ static int proc_fd_lookup(struct inode_t *dir, const char *name, size_t name_len
 	pid_t pid;
 	int fd;
 
-	/* unused name length */
-	UNUSED(name_len);
-
 	/* dir must be a directory */
 	if (!dir)
 		return -ENOENT;
@@ -327,9 +324,29 @@ static int proc_fd_lookup(struct inode_t *dir, const char *name, size_t name_len
 		iput(dir);
 		return -ENOENT;
 	}
+	
+	/* get pid */
+	pid = dir->i_ino >> 16;
+
+	/* current directory */
+	if (!name_len || (name_len == 1 && name[0] == '.')) {
+		*res_inode = dir;
+		return 0;
+	}
+
+	/* parent directory */
+	if (name_len == 2 && name[0] == '.' && name[1] == '.') {
+		   *res_inode = iget(dir->i_sb, (pid << 16) + PROC_PID_INO);
+		   if (!*res_inode) {
+			iput(dir);
+			return -ENOENT;
+		   }
+
+		   iput(dir);
+		   return 0;
+	    }
 
 	/* get task */
-	pid = dir->i_ino >> 16;
 	task = find_task(pid);
 	if (!task) {
 		iput(dir);
