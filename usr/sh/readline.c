@@ -247,7 +247,7 @@ ssize_t rline_readline(struct rline_ctx *ctx, char **line)
 				handle_escape_sequence(ctx);
 				break;
 			default:
-				if (add_char(ctx, c))
+				if (c >= ' ' && add_char(ctx, c))
 					goto err;
 
 				break;
