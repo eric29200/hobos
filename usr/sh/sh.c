@@ -15,6 +15,7 @@
 #include "../libutils/libutils.h"
 #include "readline.h"
 #include "cmd.h"
+#include "alias.h"
 
 #define USERNAME_SIZE		1024
 #define HOSTNAME_SIZE		256

@@ -7,6 +7,7 @@
 #include <pwd.h>
 
 #include "readline.h"
+#include "alias.h"
 
 /*
  * Get home directory.
@@ -104,6 +105,12 @@ int cmd_builtin(struct rline_ctx *ctx, int argc, char **argv, int *status)
 	/* history command */
 	if (strcmp(argv[0], "history") == 0) {
 		*status = cmd_history(ctx, argc, argv);
+		return 0;
+	}
+
+	/* alias command */
+	if (strcmp(argv[0], "alias") == 0) {
+		*status = cmd_alias(argc, argv);
 		return 0;
 	}
 
