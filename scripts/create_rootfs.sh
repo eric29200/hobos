@@ -32,6 +32,7 @@ sudo mkdir -p tmp/mnt
 sudo mkdir -p tmp/tmp
 sudo mkdir -p tmp/bin
 sudo mkdir -p tmp/sbin
+sudo mkdir -p tmp/root
 
 # populate disk
 sudo cp -R usr/build/* tmp/

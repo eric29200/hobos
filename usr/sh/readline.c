@@ -86,7 +86,7 @@ static int add_char(struct rline_ctx *ctx, int c)
 	size_t i;
 
 	/* grow line if needed */
-	if (ctx->len + 1 >= ctx->capacity) {
+	if (ctx->len + 2 >= ctx->capacity) {
 		ctx->capacity += LINE_GROW_SIZE;
 		ctx->line = (char *) realloc(ctx->line, sizeof(char) * ctx->capacity);
 		if (!ctx->line)
@@ -111,6 +111,9 @@ end:
 	/* update line length/position */
 	ctx->len++;
 	ctx->pos++;
+
+	/* end line */
+	ctx->line[ctx->len] = 0;
 
 	/* move cursor */
 	if (ctx->pos < ctx->len)
@@ -137,6 +140,7 @@ static void delete_char(struct rline_ctx *ctx, int move_pos)
 
 	/* update line length */
 	ctx->len--;
+	ctx->line[ctx->len] = 0;
 
 	/* render line */
 	move_to(move_pos);
@@ -212,7 +216,7 @@ static void rline_unset_read_mode(struct rline_ctx *ctx)
 /*
  * Read a line.
  */
-ssize_t rline_read_line(struct rline_ctx *ctx, char **line)
+ssize_t rline_readline(struct rline_ctx *ctx, char **line)
 {
 	ssize_t ret = -1;
 	int c;
@@ -254,10 +258,8 @@ ssize_t rline_read_line(struct rline_ctx *ctx, char **line)
 	}
 
 out:
-	/* set line */
-	if (ctx->line && !(*line = strndup(ctx->line, ctx->len)))
-		goto err;
-
+	/* set output line */
+	*line = ctx->line;
 	ret = ctx->len;
 err:
 	rline_unset_read_mode(ctx);

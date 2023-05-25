@@ -17,6 +17,6 @@ struct rline_ctx {
 
 void rline_init_ctx(struct rline_ctx *ctx);
 void rline_exit_ctx(struct rline_ctx *ctx);
-ssize_t rline_read_line(struct rline_ctx *ctx, char **line);
+ssize_t rline_readline(struct rline_ctx *ctx, char **line);
 
 #endif

@@ -250,12 +250,16 @@ static int sh_interactive()
 		fflush(stdout);
 
 		/* get next command */
-		if (rline_read_line(&ctx, &cmd_line) <= 0)
+		if (rline_readline(&ctx, &cmd_line) <= 0)
 			continue;
 
 		/* execute command */
 		execute_cmdline(cmd_line);
 	}
+
+	/* free command line */
+	if (cmd_line)
+		free(cmd_line);
 
 	/* exit readline context */
 	rline_exit_ctx(&ctx);
