@@ -122,7 +122,7 @@ static int output_redirection(char *cmd)
 /*
  * Execute a command.
  */
-static int execute_cmd(char *cmd)
+static int execute_cmd(struct rline_ctx *ctx, char *cmd)
 {
 	int argc, ret = 0, status;
 	char *argv[ARG_MAX];
@@ -144,7 +144,7 @@ static int execute_cmd(char *cmd)
 	argv[argc] = NULL;
 
 	/* try builtin commands */
-	if (cmd_builtin(argc, argv, &ret) == 0)
+	if (cmd_builtin(ctx, argc, argv, &ret) == 0)
 		goto out;
 
 	/* fork */
@@ -192,7 +192,7 @@ out:
 /*
  * Execute a command line.
  */
-static int execute_cmdline(char *cmd_line)
+static int execute_cmdline(struct rline_ctx *ctx, char *cmd_line)
 {
 	int nr_cmds, i, ret = 0;
 	char *cmds[ARG_MAX];
@@ -202,7 +202,7 @@ static int execute_cmdline(char *cmd_line)
 
 	/* execute commands */
 	for (i = 0; i < nr_cmds; i++)
-		ret |= execute_cmd(cmds[i]);
+		ret |= execute_cmd(ctx, cmds[i]);
 
 	return ret;
 }
@@ -254,7 +254,7 @@ static int sh_interactive()
 			continue;
 
 		/* execute command */
-		execute_cmdline(cmd_line);
+		execute_cmdline(&ctx, cmd_line);
 	}
 
 	/* free command line */
@@ -291,7 +291,7 @@ static int sh_script(const char *filename)
 			cmd_line[len - 1] = 0;
 
 		/* execute command */
-		execute_cmdline(cmd_line);
+		execute_cmdline(NULL, cmd_line);
 	}
 
 	/* free command line */

@@ -324,7 +324,7 @@ static int proc_fd_lookup(struct inode_t *dir, const char *name, size_t name_len
 		iput(dir);
 		return -ENOENT;
 	}
-	
+
 	/* get pid */
 	pid = dir->i_ino >> 16;
 

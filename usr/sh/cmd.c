@@ -2,8 +2,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
 #include <limits.h>
 #include <pwd.h>
+
+#include "readline.h"
 
 /*
  * Get home directory.
@@ -55,11 +58,38 @@ static int cmd_cd(int argc, char **argv)
 
 	return 0;
 }
+
+/*
+ * History command.
+ */
+static int cmd_history(struct rline_ctx *ctx, int argc, char **argv)
+{
+	size_t i = ctx->history_size;
+	struct tm *tm;
+
+	if (!ctx)
+		return -1;
+
+	/* number of lines to print */
+	if (argc > 1) {
+		i = atoi(argv[1]);
+		if (i > ctx->history_size)
+			i = ctx->history_size;
+	}
+
+	/* print history */
+	for (i = ctx->history_size - i; i < ctx->history_size; i++) {
+		tm = localtime(&ctx->history[i]->time);
+		printf("%d\t%02d:%02d\t%s\n", i + 1, tm->tm_hour, tm->tm_min, ctx->history[i]->line);
+	}
+
+	return 0;
+}
  
 /*
  * Execute builtin command.
  */
-int cmd_builtin(int argc, char **argv, int *status)
+int cmd_builtin(struct rline_ctx *ctx, int argc, char **argv, int *status)
 {
 	/* exit command */
 	if (strcmp(argv[0], "exit") == 0)
@@ -68,6 +98,12 @@ int cmd_builtin(int argc, char **argv, int *status)
 	/* cd command */
 	if (strcmp(argv[0], "cd") == 0) {
 		*status = cmd_cd(argc, argv);
+		return 0;
+	}
+
+	/* history command */
+	if (strcmp(argv[0], "history") == 0) {
+		*status = cmd_history(ctx, argc, argv);
 		return 0;
 	}
 

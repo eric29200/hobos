@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <time.h>
 #include <termios.h>
 
 #include "readline.h"
@@ -20,6 +21,108 @@
 #define KEY_END			70
 #define KEY_HOME		72
 #define KEY_BACKSPACE		127
+
+/*
+ * Allocate an history entry.
+ */
+static struct rline_hist_entry *rline_history_alloc_entry(const char *line)
+{
+	struct rline_hist_entry *entry;
+
+	/* alloc entry */
+	entry = (struct rline_hist_entry *) malloc(sizeof(struct rline_hist_entry));
+	if (!entry)
+		return NULL;
+
+	/* set line */
+	entry->line = strdup(line);
+	if (!entry->line) {
+		free(entry);
+		return NULL;
+	}
+
+	/* set time */
+	entry->time = time(NULL);
+
+	return entry;
+}
+
+/*
+ * Free an history entry.
+ */
+static void rline_history_free_entry(struct rline_hist_entry *entry)
+{
+	if (entry) {
+		if (entry->line)
+			free(entry->line);
+
+		free(entry);
+	}
+}
+
+/*
+ * Save a line in history.
+ */
+static void rline_history_save_line(struct rline_ctx *ctx, const char *line)
+{
+	struct rline_hist_entry *entry;
+
+	/* history full */
+	if (ctx->history_size == ctx->history_capacity) {
+		/* no history */
+		if (!ctx->history_capacity)
+			return;
+
+		/* remove first entry */
+		if (ctx->history[0])
+			rline_history_free_entry(ctx->history[0]);
+
+		/* shift other entries on the left */
+		memmove(ctx->history, ctx->history + 1, ctx->history_size * sizeof(struct rline_hist_entry *));
+
+		/* update history size */
+		ctx->history_size--;
+	}
+
+	/* allocate a new entry */
+	entry = rline_history_alloc_entry(line);
+	if (!entry)
+		return;
+
+	/* save entry in history */
+	ctx->history[ctx->history_size++] = entry;
+
+	/* reset read position */
+	ctx->history_rpos = 0;
+}
+
+static void move_left(int n);
+
+/*
+ * Load a line from history.
+ */
+static void rline_history_load_line(struct rline_ctx *ctx, int pos)
+{
+	size_t i;
+
+	/* clear current line */
+	if (ctx->pos > 0) {
+		move_left(ctx->pos);
+		for (i = 0; i < ctx->len; i++)
+			fputc(' ', stdout);
+		move_left(ctx->len);
+	}
+
+	/* copy history line */
+	strcpy(ctx->line, ctx->history[ctx->history_size - pos]->line);
+
+	/* set length/position */
+	ctx->len = strlen(ctx->line);
+	ctx->pos = ctx->len;
+
+	/* render line */
+	printf("%s", ctx->line);
+}
 
 /*
  * Move to (n < 0 = left, n > 0 = right).
@@ -163,6 +266,14 @@ static void handle_escape_sequence(struct rline_ctx *ctx)
 			getc(stdin);
 			delete_char(ctx, 0);
 			break;
+		case KEY_UP:
+		  	if (ctx->history_rpos < ctx->history_size)
+		 		rline_history_load_line(ctx, ++ctx->history_rpos);
+			break;
+		case KEY_DOWN:
+		  	if (ctx->history_rpos > 0)
+		 		rline_history_load_line(ctx, --ctx->history_rpos);
+			break;
 		case KEY_LEFT:
 			move_cursor(ctx, -1);
 			break;
@@ -261,6 +372,10 @@ out:
 	/* set output line */
 	*line = ctx->line;
 	ret = ctx->len;
+
+	/* save line in history */
+	if (ctx->len > 0)
+		rline_history_save_line(ctx, *line);
 err:
 	rline_unset_read_mode(ctx);
 	return ret;
@@ -271,7 +386,20 @@ err:
  */
 void rline_init_ctx(struct rline_ctx *ctx)
 {
+	size_t i;
+
+	/* reset context */
 	memset(ctx, 0, sizeof(struct rline_ctx));
+
+	/* allocate history */
+	ctx->history = (struct rline_hist_entry **) malloc(sizeof(struct rline_hist_entry *) * RLINE_HISTORY_SIZE);
+	if (!ctx->history)
+		return;
+
+	/* reset history */
+	ctx->history_capacity = RLINE_HISTORY_SIZE;
+	for (i = 0; i < ctx->history_capacity; i++)
+		ctx->history[i] = NULL;
 }
 
 /*
@@ -279,10 +407,22 @@ void rline_init_ctx(struct rline_ctx *ctx)
  */
 void rline_exit_ctx(struct rline_ctx *ctx)
 {
+	size_t i;
+
 	if (ctx) {
+		/* free current line */
 		if (ctx->line)
 			free(ctx->line);
 
+		/* free history */
+		if (ctx->history) {
+			for (i = 0; i < ctx->history_size; i++)
+				rline_history_free_entry(ctx->history[i]);
+
+			free(ctx->history);
+		}
+
+		/* reset context */
 		memset(ctx, 0, sizeof(struct rline_ctx));
 	}
 }

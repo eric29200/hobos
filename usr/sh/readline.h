@@ -4,15 +4,29 @@
 #include <stdio.h>
 #include <termios.h>
 
+#define RLINE_HISTORY_SIZE		5
+
+/*
+ * Readline history entry.
+ */
+struct rline_hist_entry {
+	char *		line;					/* line */
+	time_t		time;					/* time */
+};
+
 /*
  * Readline context.
  */
 struct rline_ctx {
-	struct termios	termios;	/* initial termios */
-	char *		line;		/* current line */
-	size_t		capacity;	/* current line capacity */
-	size_t		len;		/* current line length */
-	size_t		pos;		/* current position in line */
+	struct termios			termios;		/* initial termios */
+	char *				line;			/* current line */
+	size_t				capacity;		/* current line capacity */
+	size_t				len;			/* current line length */
+	size_t				pos;			/* current position in line */
+	struct rline_hist_entry **	history;		/* history */
+	size_t				history_capacity;	/* history capacity */
+	size_t				history_size;		/* history size */
+	size_t				history_rpos;		/* history read position */
 };
 
 void rline_init_ctx(struct rline_ctx *ctx);
