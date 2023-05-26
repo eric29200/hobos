@@ -23,6 +23,7 @@
 static char username[USERNAME_SIZE];
 static char hostname[HOSTNAME_SIZE];
 static char cwd[PATH_MAX];
+static char homedir[PATH_MAX];
 
 /*
  * Init prompt values.
@@ -49,10 +50,13 @@ static void init_prompt_values()
 	/* get passwd */
 	uid = geteuid();
 	passwd = getpwuid(uid);
-	if (passwd)
+	if (passwd) {
 		strncpy(username, passwd->pw_name, USERNAME_SIZE);
-	else
+		strncpy(homedir, passwd->pw_dir, PATH_MAX);
+	} else {
 		snprintf(username, USERNAME_SIZE, "%d", uid);
+		strncpy(homedir, ".", PATH_MAX);
+	}
 }
 
 /*
@@ -120,9 +124,6 @@ static int sh_interactive()
 		perror("SIGINT");
 	if (signal(SIGCHLD, sigchld_handler))
 		perror("SIGINT");
-
-	/* init prompt */
-	init_prompt_values();
 
 	/* init readline context */
 	rline_init_ctx(&ctx);
@@ -213,6 +214,7 @@ struct option long_opts[] = {
 int main(int argc, char **argv)
 {
 	const char *name = argv[0];
+	char path[PATH_MAX];
 	int c;
 
 	/* get options */
@@ -231,6 +233,13 @@ int main(int argc, char **argv)
 	/* skip options */
 	argc -= optind;
 	argv += optind;
+
+	/* init prompt */
+	init_prompt_values();
+
+	/* load .shrc */
+	if (build_path(homedir, ".shrc", path, PATH_MAX) == 0)
+		sh_script(path);
 
 	/* no argument : interactive shell */
 	if (!argc)

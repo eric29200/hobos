@@ -1,0 +1,5 @@
+alias ls ls --color
+alias l ls --color
+alias ll ls -l --color
+alias hist history
+alias h history

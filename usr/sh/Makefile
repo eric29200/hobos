@@ -1,8 +1,9 @@
 CC		= i686-linux-gnu-gcc
 AR		= i686-linux-gnu-ar
 LIBC		= ../../libc/libc.a
+LIBUTILS	= ../libutils/libutils.a
 CFLAGS		= -O0 -Wall -Wextra -nostdinc -fno-builtin -fno-stack-protector -fno-pic -I../../libc/include -ffreestanding -nostdlib -m32
-LDFLAGS		= $(LIBC) -lgcc -static
+LDFLAGS		= $(LIBUTILS) $(LIBC) -lgcc -static
 BUILD_DIR	= ../build/bin
 
 all: sh
