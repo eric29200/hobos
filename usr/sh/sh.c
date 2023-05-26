@@ -15,7 +15,7 @@
 #include "../libutils/libutils.h"
 #include "readline.h"
 #include "cmd.h"
-#include "alias.h"
+#include "utils.h"
 
 #define USERNAME_SIZE		1024
 #define HOSTNAME_SIZE		256
@@ -53,23 +53,6 @@ static void init_prompt_values()
 		strncpy(username, passwd->pw_name, USERNAME_SIZE);
 	else
 		snprintf(username, USERNAME_SIZE, "%d", uid);
-}
-
-/*
- * Tokenize a string.
- */
-static int tokenize(char *str, char **tokens, size_t tokens_len, char *delim)
-{
-	size_t n = 0;
-	char *token;
-
-	token = strtok(str, delim);
-	while (token && n < tokens_len) {
-		tokens[n++] = token;
-		token = strtok(NULL, delim);
-	}
-
-	return n;
 }
 
 /*
@@ -140,9 +123,8 @@ static int execute_cmd(struct rline_ctx *ctx, char *cmd)
 	if (fd_out < 0)
 		return -1;
 
-	/* parse arguments (argv must be NULL terminated) */
-	argc = tokenize(cmd, argv, ARG_MAX, " ");
-	argv[argc] = NULL;
+	/* parse arguments */
+	argc = make_args(cmd, argv, ARG_MAX);
 
 	/* try builtin commands */
 	if (cmd_builtin(ctx, argc, argv, &ret) == 0)

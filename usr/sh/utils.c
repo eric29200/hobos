@@ -3,6 +3,8 @@
 #include <string.h>
 #include <ctype.h>
 
+#include "alias.h"
+
 /*
  * Concat arguments.
  */
@@ -39,4 +41,35 @@ char *concat_args(int argc, char **argv)
 	*s = 0;
 
 	return buf;
+}
+
+/*
+ * Tokenize a string.
+ */
+int tokenize(char *str, char **tokens, size_t tokens_len, char *delim)
+{
+	size_t n = 0;
+	char *token;
+
+	token = strtok(str, delim);
+	while (token && n < tokens_len) {
+		tokens[n++] = token;
+		token = strtok(NULL, delim);
+	}
+
+	return n;
+}
+
+/*
+ * Make arguments.
+ */
+int make_args(char *cmd, char **argv, int arg_max)
+{
+	int argc;
+
+	/* make arguments */
+	argc = tokenize(cmd, argv, arg_max, " ");
+	argv[argc] = NULL;
+
+	return argc;
 }

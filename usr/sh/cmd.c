@@ -114,5 +114,11 @@ int cmd_builtin(struct rline_ctx *ctx, int argc, char **argv, int *status)
 		return 0;
 	}
 
+	/* unalias command */
+	if (strcmp(argv[0], "unalias") == 0) {
+		*status = cmd_unalias(argc, argv);
+		return 0;
+	}
+
 	return -1;
 }
