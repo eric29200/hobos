@@ -62,24 +62,13 @@ static int execute_cmdline(struct rline_ctx *ctx, char *cmd_line)
 {
 	int nr_cmds, i, ret = 0;
 	char *cmds[ARG_MAX];
-	struct job *job;
 
 	/* parse commands */
 	nr_cmds = tokenize(cmd_line, cmds, ARG_MAX, ";");
 
-	/* execute commands */
-	for (i = 0; i < nr_cmds; i++) {
-		/* create job */
-		job = job_create(cmds[i]);
-		if (!job) {
-			ret = -1;
-			continue;
-		}
-
-		/* execute job */
-		if (job->argc)
-			ret |= job_execute(job, ctx);
-	}
+	/* submit jobs */
+	for (i = 0; i < nr_cmds; i++)
+		ret |= job_submit(cmds[i], ctx);
 
 	return ret;
 }
@@ -107,7 +96,10 @@ static void sigchld_handler()
 	/* free matching job */
 	for (i = 0; i < NR_JOBS; i++) {
 		if (job_table[i].pid == pid) {
+			/* print ending message */
 			printf("[%d]\tDone\t%s\n", job_table[i].id, job_table[i].cmdline);
+
+			/* free job */
 			job_free(&job_table[i]);
 		}
 	}

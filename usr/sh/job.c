@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <ctype.h>
 #include <sys/wait.h>
 
 #include "job.h"
@@ -9,10 +10,10 @@
 #include "cmd.h"
 #include "utils.h"
 
-#define NR_JOBS			32
 
 /* job table */
 struct job job_table[NR_JOBS] = { 0 };
+struct job main_job;
 
 /*
  * Free a job.
@@ -35,75 +36,28 @@ void job_free(struct job *job)
 }
 
 /*
- * Create a job.
- */
-struct job *job_create(char *cmdline)
-{
-	struct job *job;
-	size_t i;
-
-	/* find a free job */
-	for (i = 0; i < NR_JOBS; i++)
-		if (job_table[i].id == 0)
-			break;
-
-	/* no free job */
-	if (i >= NR_JOBS)
-		return NULL;
-
-	/* set job */
-	job = &job_table[i];
-	job->id = i + 1;
-
-	/* input redirection */
-	job->fd_in = redir_input(cmdline);
-	if (job->fd_in < 0)
-		goto err;
-
-	/* output redirection */
-	job->fd_out = redir_output(cmdline);
-	if (job->fd_out < 0)
-		goto err;
-
-	/* dup command line */
-	job->cmdline = strdup(cmdline);
-	if (!job->cmdline) 
-		goto err;
-	
-	/* parse arguments */
-	job->argc = make_args(job->cmdline, job->argv, ARG_MAX);
-
-	/* check background */
-	job->bg = job->argc && strcmp(job->argv[job->argc - 1], "&") == 0;
-	if (job->bg)
-		job->argv[--job->argc] = NULL;
-
-	return job;
-err:
-	job_free(job);
-	return NULL;
-}
-
-/*
  * Execute a job.
  */
-int job_execute(struct job *job, struct rline_ctx *ctx)
+static int job_execute(struct job *job, struct rline_ctx *ctx)
 {
-	int ret = 0, status;
+	int ret, status;
 	pid_t pid;
 
 	/* try builtin commands */
 	if (cmd_builtin(ctx, job->argc, job->argv, &ret) == 0) {
 		job_free(job);
-		goto out;
+		return 0;
 	}
 
 	/* fork */
 	pid = fork();
 	if (pid < 0) {
 		perror("fork");
-		ret = -1;
-	} else if (pid == 0) {
+		return -1;
+	}
+	
+	/* child process */
+	if (pid == 0) {
 		/* redirect stdin */
 		if (job->fd_in != STDIN_FILENO) {
 			dup2(job->fd_in, STDIN_FILENO);
@@ -128,18 +82,85 @@ int job_execute(struct job *job, struct rline_ctx *ctx)
 
 	/* set job pid */
 	job->pid = pid;
-
-	/* foreground job : wait for whild */
+	
+	/* wait for child and free job */
 	if (!job->bg) {
 		while ((ret = waitpid(job->pid, &status, 0)) == 0);
 		if (ret < 0)
 			perror("waitpid");
 
 		/* free job */
-		if (!job->bg)
-			job_free(job);
+		job_free(job);
 	}
 
-out:
 	return ret;
+}
+ 
+/*
+ * Submit a job.
+ */
+int job_submit(char *cmdline, struct rline_ctx *ctx)
+{
+	struct job *job = &main_job;
+	int len, i;
+	char *s;
+
+	/* empty command line */
+	len = strlen(cmdline);
+	if (!len)
+		return 0;
+
+	/* background job */
+	for (s = cmdline + len - 1; len >= 0; len--, s--)
+		if (!isspace(*s))
+			break;
+
+	/* background job */
+	if (*s == '&') {
+		/* remove ending "&" */
+		*s = 0;
+
+		/* find a free job */
+		for (i = 0; i < NR_JOBS; i++)
+			if (!job_table[i].id)
+				break;
+
+		/* no free job */
+		if (i >= NR_JOBS)
+			return -1;
+		
+		/* set job */
+		job = &job_table[i];
+		job->id = i + 1;
+		job->bg = 1;
+
+	}
+
+	/* input redirection */
+	job->fd_in = redir_input(cmdline);
+	if (job->fd_in < 0)
+		goto err;
+
+	/* output redirection */
+	job->fd_out = redir_output(cmdline);
+	if (job->fd_out < 0)
+		goto err;
+
+	/* dup command line */
+	job->cmdline = strdup(cmdline);
+	if (!job->cmdline) 
+		goto err;
+	
+	/* parse arguments */
+	job->argc = make_args(job->cmdline, job->argv, ARG_MAX);
+	if (!job->argc) {
+		job_free(job);
+		return 0;
+	}
+
+	/* execute job )*/
+	return job_execute(job, ctx);
+err:
+	job_free(job);
+	return -1;
 }

@@ -25,8 +25,7 @@ struct job {
 /* job table */
 extern struct job job_table[NR_JOBS];
 
-struct job *job_create(char *cmdline);
+int job_submit(char *cmdline, struct rline_ctx *ctx);
 void job_free(struct job *job);
-int job_execute(struct job *job, struct rline_ctx *ctx);
 
 #endif
