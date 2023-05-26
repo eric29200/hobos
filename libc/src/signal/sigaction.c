@@ -33,7 +33,7 @@ int __sigaction(int signum, const struct sigaction *act, struct sigaction *oldac
 
 int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact)
 {
-	unsigned long set [NSIG / (8 * sizeof(long))];
+	sigset_t set;
 	int ret;
 
 	/* check signal number */

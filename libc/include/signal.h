@@ -57,7 +57,7 @@
 #define SIG_ERR		((sighandler_t) - 1)
 
 typedef void (*sighandler_t)(int);
-typedef struct __sigset_t { unsigned long __bits[128 / sizeof(long)]; } sigset_t;
+typedef int sigset_t;
 
 /*
  * Signal value.
@@ -147,11 +147,15 @@ struct sigaction {
 #define sa_sigaction	__sa_handler.sa_sigaction
 
 
-void __block_all_sigs(void *set);
-void __restore_sigs(void *set);
+void __block_all_sigs(sigset_t *set);
+void __restore_sigs(sigset_t *set);
 
 int kill(pid_t pid, int sig);
 sighandler_t signal(int signum, sighandler_t handler);
 int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact);
+int sigemptyset(sigset_t *set);
+int sigaddset(sigset_t *set, int signum);
+int sigprocmask(int how, const sigset_t *set, sigset_t *old);
+int sigismember(const sigset_t *set, int signum);
 
 #endif
