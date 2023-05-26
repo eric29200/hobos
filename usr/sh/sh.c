@@ -14,7 +14,7 @@
 
 #include "../libutils/libutils.h"
 #include "readline.h"
-#include "cmd.h"
+#include "job.h"
 #include "utils.h"
 
 #define USERNAME_SIZE		1024
@@ -56,136 +56,32 @@ static void init_prompt_values()
 }
 
 /*
- * Input redirection.
- */
-static int input_redirection(char *cmd)
-{
-	char *tokens[2], *filename;
-	int fd;
-
-	if (tokenize(cmd, tokens, 2, "<") <= 1)
-		return STDIN_FILENO;
-
-	/* trim filename */
-	filename = strtok(tokens[1], " ");
-
-	/* open input file */
-	fd = open(filename, O_RDONLY, 0);
-	if (fd < 0) {
-		perror(filename);
-		return -1;
-	}
-
-	return fd;
-}
-
-/*
- * Output redirection.
- */
-static int output_redirection(char *cmd)
-{
-	char *tokens[2], *filename;
-	int fd;
-
-	if (tokenize(cmd, tokens, 2, ">") <= 1)
-		return STDOUT_FILENO;
-
-	/* trim filename */
-	filename = strtok(tokens[1], " ");
-
-	/* open output file */
-	fd = open(filename, O_CREAT | O_TRUNC | O_WRONLY, 0644);
-	if (fd < 0) {
-		perror(filename);
-		return -1;
-	}
-
-	return fd;
-}
-
-/*
- * Execute a command.
- */
-static int execute_cmd(struct rline_ctx *ctx, char *cmd)
-{
-	int argc, ret = 0, status;
-	char *argv[ARG_MAX];
-	int fd_in, fd_out;
-	pid_t pid;
-
-	/* input redirection */
-	fd_in = input_redirection(cmd);
-	if (fd_in < 0)
-		return -1;
-
-	/* output redirection */
-	fd_out = output_redirection(cmd);
-	if (fd_out < 0)
-		return -1;
-
-	/* parse arguments */
-	argc = make_args(cmd, argv, ARG_MAX);
-
-	/* try builtin commands */
-	if (cmd_builtin(ctx, argc, argv, &ret) == 0)
-		goto out;
-
-	/* fork */
-	pid = fork();
-	if (pid < 0) {
-		perror("fork");
-		ret = 1;
-	} else if (pid == 0) {
-		/* redirect stdin */
-		if (fd_in != STDIN_FILENO) {
-			dup2(fd_in, STDIN_FILENO);
-			close(fd_in);
-		}
-
-		/* redirect stdout */
-		if (fd_out != STDOUT_FILENO) {
-			dup2(fd_out, STDOUT_FILENO);
-			close(fd_out);
-		}
-
-		/* execute command */
-		ret = execvpe(argv[0], argv, environ);
-		if (ret < 0)
-			perror(argv[0]);
-
-		/* exit child */
-		exit(ret);
-	} else {
-		/* wait for whild */
-		while ((ret = waitpid(pid, &status, 0)) == 0);
-		if (ret < 0)
-			perror("waitpid");
-	}
-
-out:
-	/* close redirections */
-	if (fd_in != STDIN_FILENO)
-		close(fd_in);
-	if (fd_out != STDOUT_FILENO)
-		close(fd_out);
-
-	return ret;
-}
-
-/*
  * Execute a command line.
  */
 static int execute_cmdline(struct rline_ctx *ctx, char *cmd_line)
 {
 	int nr_cmds, i, ret = 0;
 	char *cmds[ARG_MAX];
+	struct job *job;
 
 	/* parse commands */
 	nr_cmds = tokenize(cmd_line, cmds, ARG_MAX, ";");
 
 	/* execute commands */
-	for (i = 0; i < nr_cmds; i++)
-		ret |= execute_cmd(ctx, cmds[i]);
+	for (i = 0; i < nr_cmds; i++) {
+		/* create job */
+		job = job_create(cmds[i]);
+		if (!job) {
+			ret = -1;
+			continue;
+		}
+
+		/* execute job */
+		ret |= job_execute(job, ctx);
+
+		/* free job */
+		job_free(job);
+	}
 
 	return ret;
 }
@@ -264,7 +160,7 @@ static int sh_script(const char *filename)
 	fp = fopen(filename, "r");
 	if (!fp) {
 		perror(filename);
-		return 1;
+		return -1;
 	}
 
 	/* execute each line */

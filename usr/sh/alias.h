@@ -3,9 +3,12 @@
 
 #include <limits.h>
 
+/*
+ * Alias.
+ */
 struct alias {
-	char *		name;
-	char *		value;
+	char *		name;		/* alias name */
+	char *		value;		/* alias value */
 };
 
 struct alias *alias_find(const char *name);

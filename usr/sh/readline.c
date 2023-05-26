@@ -193,7 +193,7 @@ static int add_char(struct rline_ctx *ctx, int c)
 		ctx->capacity += LINE_GROW_SIZE;
 		ctx->line = (char *) realloc(ctx->line, sizeof(char) * ctx->capacity);
 		if (!ctx->line)
-			return 1;
+			return -1;
 	}
 
 	/* append character */

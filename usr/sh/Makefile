@@ -7,7 +7,7 @@ BUILD_DIR	= ../build/bin
 
 all: sh
 
-sh: sh.o readline.o cmd.o alias.o utils.o
+sh: sh.o readline.o cmd.o alias.o job.o redir.o utils.o
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -o $(BUILD_DIR)/$@ $^ $(LDFLAGS)
 
