@@ -9,6 +9,11 @@
 #include "cmd.h"
 #include "utils.h"
 
+#define NR_JOBS			32
+
+/* job table */
+struct job job_table[NR_JOBS] = { 0 };
+
 /*
  * Free a job.
  */
@@ -24,7 +29,8 @@ void job_free(struct job *job)
 		if (job->fd_out >= 0 && job->fd_out != STDOUT_FILENO)
 			close(job->fd_out);
 
-		free(job);
+		memset(job, 0, sizeof(struct job));
+		job->pid = -1;
 	}
 }
 
@@ -34,15 +40,21 @@ void job_free(struct job *job)
 struct job *job_create(char *cmdline)
 {
 	struct job *job;
+	size_t i;
 
-	/* allocate a new job */
-	job = (struct job *) malloc(sizeof(struct job));
-	if (!job)
+	/* find a free job */
+	for (i = 0; i < NR_JOBS; i++)
+		if (job_table[i].id == 0)
+			break;
+
+	/* no free job */
+	if (i >= NR_JOBS)
 		return NULL;
 
-	/* reset job */
-	memset(job, 0, sizeof(struct job));
-	
+	/* set job */
+	job = &job_table[i];
+	job->id = i + 1;
+
 	/* input redirection */
 	job->fd_in = redir_input(cmdline);
 	if (job->fd_in < 0)
@@ -60,6 +72,11 @@ struct job *job_create(char *cmdline)
 	
 	/* parse arguments */
 	job->argc = make_args(job->cmdline, job->argv, ARG_MAX);
+
+	/* check background */
+	job->bg = job->argc && strcmp(job->argv[job->argc - 1], "&") == 0;
+	if (job->bg)
+		job->argv[--job->argc] = NULL;
 
 	return job;
 err:
@@ -107,10 +124,15 @@ int job_execute(struct job *job, struct rline_ctx *ctx)
 		return ret;
 	}
 
+	/* set job pid */
+	job->pid = pid;
+
 	/* wait for whild */
-	while ((ret = waitpid(pid, &status, 0)) == 0);
-	if (ret < 0)
-		perror("waitpid");
+	if (!job->bg) {
+		while ((ret = waitpid(job->pid, &status, 0)) == 0);
+		if (ret < 0)
+			perror("waitpid");
+	}
 
 out:
 	return ret;

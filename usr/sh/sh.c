@@ -77,10 +77,12 @@ static int execute_cmdline(struct rline_ctx *ctx, char *cmd_line)
 		}
 
 		/* execute job */
-		ret |= job_execute(job, ctx);
+		if (job->argc)
+			ret |= job_execute(job, ctx);
 
 		/* free job */
-		job_free(job);
+		if (!job->bg)
+			job_free(job);
 	}
 
 	return ret;
@@ -96,6 +98,26 @@ static void sigint_handler()
 }
 
 /*
+ * SIGCHLD handler.
+ */
+static void sigchld_handler()
+{
+	int status, i;
+	pid_t pid;
+
+	/* get terminated process */
+	pid = waitpid(-1, &status, 1);
+
+	/* free matching job */
+	for (i = 0; i < NR_JOBS; i++) {
+		if (job_table[i].pid == pid) {
+			printf("[%d]\tDone\t%s\n", job_table[i].id, job_table[i].cmdline);
+			job_free(&job_table[i]);
+		}
+	}
+}
+
+/*
  * Interactive shell.
  */
 static int sh_interactive()
@@ -107,6 +129,8 @@ static int sh_interactive()
 
 	/* install signal handlers */
 	if (signal(SIGINT, sigint_handler))
+		perror("SIGINT");
+	if (signal(SIGCHLD, sigchld_handler))
 		perror("SIGINT");
 
 	/* init prompt */

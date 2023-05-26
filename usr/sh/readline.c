@@ -4,6 +4,7 @@
 #include <string.h>
 #include <time.h>
 #include <termios.h>
+#include <signal.h>
 
 #include "readline.h"
 
@@ -305,6 +306,7 @@ static void handle_escape_sequence(struct rline_ctx *ctx)
 static void rline_set_read_mode(struct rline_ctx *ctx)
 {
 	struct termios termios;
+	sigset_t mask;
 
 	/* save termios */
 	tcgetattr(STDOUT_FILENO, &ctx->termios);
@@ -313,6 +315,11 @@ static void rline_set_read_mode(struct rline_ctx *ctx)
 	memcpy(&termios, &ctx->termios, sizeof(struct termios));
 	termios.c_lflag &= ~(ICANON | ECHO | ISIG);
 	tcsetattr(STDOUT_FILENO, TCSAFLUSH, &termios);
+
+	/* block SIGCHLD */
+	sigemptyset(&mask);
+	sigaddset(&mask, SIGCHLD);
+	sigprocmask(SIG_BLOCK, &mask, &ctx->sig_mask);
 }
 
 /*
@@ -322,6 +329,9 @@ static void rline_unset_read_mode(struct rline_ctx *ctx)
 {
 	/* restore initial termios */
 	tcsetattr(STDIN_FILENO, TCSAFLUSH, &ctx->termios);
+
+	/* restore signals */
+	sigprocmask(SIG_SETMASK, &ctx->sig_mask, NULL);
 }
 
 /*

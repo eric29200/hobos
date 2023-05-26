@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <termios.h>
+#include <signal.h>
 
 #define RLINE_HISTORY_SIZE		5
 
@@ -19,6 +20,7 @@ struct rline_hist_entry {
  */
 struct rline_ctx {
 	struct termios			termios;		/* initial termios */
+	sigset_t			sig_mask;		/* initial signal mask */
 	char *				line;			/* current line */
 	size_t				capacity;		/* current line capacity */
 	size_t				len;			/* current line length */
