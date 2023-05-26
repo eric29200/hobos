@@ -158,7 +158,7 @@ int job_submit(char *cmdline, struct rline_ctx *ctx)
 		return 0;
 	}
 
-	/* execute job )*/
+	/* execute job */
 	return job_execute(job, ctx);
 err:
 	job_free(job);
