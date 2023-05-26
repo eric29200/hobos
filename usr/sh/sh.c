@@ -79,10 +79,6 @@ static int execute_cmdline(struct rline_ctx *ctx, char *cmd_line)
 		/* execute job */
 		if (job->argc)
 			ret |= job_execute(job, ctx);
-
-		/* free job */
-		if (!job->bg)
-			job_free(job);
 	}
 
 	return ret;

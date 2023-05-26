@@ -127,11 +127,15 @@ int job_execute(struct job *job, struct rline_ctx *ctx)
 	/* set job pid */
 	job->pid = pid;
 
-	/* wait for whild */
+	/* foreground job : wait for whild */
 	if (!job->bg) {
 		while ((ret = waitpid(job->pid, &status, 0)) == 0);
 		if (ret < 0)
 			perror("waitpid");
+
+		/* free job */
+		if (!job->bg)
+			job_free(job);
 	}
 
 out:
