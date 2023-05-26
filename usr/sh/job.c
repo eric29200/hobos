@@ -93,8 +93,10 @@ int job_execute(struct job *job, struct rline_ctx *ctx)
 	pid_t pid;
 
 	/* try builtin commands */
-	if (cmd_builtin(ctx, job->argc, job->argv, &ret) == 0)
+	if (cmd_builtin(ctx, job->argc, job->argv, &ret) == 0) {
+		job_free(job);
 		goto out;
+	}
 
 	/* fork */
 	pid = fork();
