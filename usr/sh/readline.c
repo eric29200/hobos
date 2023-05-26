@@ -115,7 +115,10 @@ static void rline_history_load_line(struct rline_ctx *ctx, int pos)
 	}
 
 	/* copy history line */
-	strcpy(ctx->line, ctx->history[ctx->history_size - pos]->line);
+	if (pos == 0)
+		*(ctx->line) = 0;
+	else
+		strcpy(ctx->line, ctx->history[ctx->history_size - pos]->line);
 
 	/* set length/position */
 	ctx->len = strlen(ctx->line);
