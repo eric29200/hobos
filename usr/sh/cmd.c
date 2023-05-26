@@ -8,6 +8,7 @@
 
 #include "readline.h"
 #include "alias.h"
+#include "job.h"
 
 /*
  * Get home directory.
@@ -86,6 +87,20 @@ static int cmd_history(struct rline_ctx *ctx, int argc, char **argv)
 
 	return 0;
 }
+
+/*
+ * Jobs command.
+ */
+static int cmd_jobs()
+{
+	int i;
+
+	for (i = 0; i < NR_JOBS; i++)
+		if (job_table[i].id)
+			printf("[%d]\t%s\n", job_table[i].id, job_table[i].cmdline);
+
+	return 0;
+}
  
 /*
  * Execute builtin command.
@@ -117,6 +132,12 @@ int cmd_builtin(struct rline_ctx *ctx, int argc, char **argv, int *status)
 	/* unalias command */
 	if (strcmp(argv[0], "unalias") == 0) {
 		*status = cmd_unalias(argc, argv);
+		return 0;
+	}
+
+	/* jobs command */
+	if (strcmp(argv[0], "jobs") == 0) {
+		*status = cmd_jobs();
 		return 0;
 	}
 
