@@ -9,6 +9,7 @@
 #include "job.h"
 #include "redir.h"
 #include "cmd.h"
+#include "alias.h"
 #include "utils.h"
 
 
@@ -34,6 +35,52 @@ void job_free(struct job *job)
 		memset(job, 0, sizeof(struct job));
 		job->pid = -1;
 	}
+}
+
+/*
+ * Make command line and arguments.
+ */
+static int job_make_args(struct job *job, char *cmdline)
+{
+	char *s0, *e0, *argv0;
+	bool has_arg = false;
+	struct alias *alias;
+	size_t len0, lenr;
+
+	/* get argv[0] */
+	for (s0 = cmdline; *s0 && isspace(*s0); s0++);
+	for (e0 = s0; *e0 && !isspace(*e0); e0++);
+
+	/* end argv[0] */
+	if (isspace(*e0)) {
+		has_arg = true;
+		*e0 = 0;
+	}
+
+	/* use alias instead of argv[0] */
+	alias = alias_find(s0);
+	if (alias)
+		argv0 = alias->value;
+	else
+		argv0 = s0;
+
+	/* allocate command line */
+	len0 = strlen(argv0);
+	lenr = has_arg ? strlen(e0 + 1) : 0;
+	job->cmdline = (char *) malloc(len0 + lenr + 2);
+	if (!job->cmdline)
+		return -1;
+
+	/* concat argv[0] + ' ' + remaining arguments */
+	memcpy(job->cmdline, argv0, len0);
+	job->cmdline[len0] = ' ';
+	memcpy(job->cmdline + len0 + 1, e0 + 1, lenr);
+	job->cmdline[len0 + lenr + 1] = 0;
+
+	/* parse arguments */
+	job->argc = make_args(job->cmdline, job->argv, ARG_MAX);
+
+	return 0;
 }
 
 /*
@@ -160,13 +207,11 @@ int job_submit(char *cmdline, struct rline_ctx *ctx)
 	if (job->fd_out < 0)
 		goto err;
 
-	/* dup command line */
-	job->cmdline = strdup(cmdline);
-	if (!job->cmdline) 
+	/* make arguments */
+	if (job_make_args(job, cmdline))
 		goto err;
 
-	/* parse arguments */
-	job->argc = make_args(job->cmdline, job->argv, ARG_MAX);
+	/* no arguments */
 	if (!job->argc) {
 		job_free(job);
 		return 0;
