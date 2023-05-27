@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <errno.h>
 #include <sys/wait.h>
 
 #include "job.h"
@@ -40,6 +41,7 @@ void job_free(struct job *job)
  */
 static int job_execute(struct job *job, struct rline_ctx *ctx)
 {
+	sigset_t set, set_old;
 	int ret, status;
 	pid_t pid;
 
@@ -49,13 +51,20 @@ static int job_execute(struct job *job, struct rline_ctx *ctx)
 		return 0;
 	}
 
+	/* block signals during fork */
+	sigemptyset(&set);
+	sigaddset(&set, SIGCHLD);
+	sigaddset(&set, SIGINT);
+	sigaddset(&set, SIGTERM);
+	sigprocmask(SIG_BLOCK, &set, &set_old);
+
 	/* fork */
 	pid = fork();
 	if (pid < 0) {
 		perror("fork");
 		return -1;
 	}
-	
+
 	/* child process */
 	if (pid == 0) {
 		/* redirect stdin */
@@ -80,13 +89,18 @@ static int job_execute(struct job *job, struct rline_ctx *ctx)
 		return ret;
 	}
 
+	/* restore signals */
+	sigprocmask(SIG_SETMASK, &set_old, NULL);
+
 	/* set job pid */
 	job->pid = pid;
-	
+
 	/* wait for child and free job */
 	if (!job->bg) {
 		while ((ret = waitpid(job->pid, &status, 0)) == 0);
-		if (ret < 0)
+
+		/* no matching child : sigchld probably got it */
+		if (ret < 0 && errno != ECHILD)
 			perror("waitpid");
 
 		/* free job */
@@ -128,7 +142,7 @@ int job_submit(char *cmdline, struct rline_ctx *ctx)
 		/* no free job */
 		if (i >= NR_JOBS)
 			return -1;
-		
+
 		/* set job */
 		job = &job_table[i];
 		job->id = i + 1;
@@ -150,7 +164,7 @@ int job_submit(char *cmdline, struct rline_ctx *ctx)
 	job->cmdline = strdup(cmdline);
 	if (!job->cmdline) 
 		goto err;
-	
+
 	/* parse arguments */
 	job->argc = make_args(job->cmdline, job->argv, ARG_MAX);
 	if (!job->argc) {

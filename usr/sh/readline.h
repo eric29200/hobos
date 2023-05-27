@@ -5,7 +5,7 @@
 #include <termios.h>
 #include <signal.h>
 
-#define RLINE_HISTORY_SIZE		5
+#define RLINE_HISTORY_SIZE		50
 
 /*
  * Readline history entry.

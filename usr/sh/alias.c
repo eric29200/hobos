@@ -22,7 +22,7 @@ static void alias_free(struct alias *alias)
 	if (alias) {
 		if (alias->name)
 			free(alias->name);
-		
+
 		if (alias->value)
 			free(alias->value);
 	}
