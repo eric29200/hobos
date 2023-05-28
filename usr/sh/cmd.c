@@ -6,7 +6,6 @@
 #include <limits.h>
 #include <pwd.h>
 
-#include "readline.h"
 #include "alias.h"
 #include "job.h"
 

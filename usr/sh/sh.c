@@ -13,7 +13,7 @@
 #include <sys/wait.h>
 
 #include "../libutils/libutils.h"
-#include "readline.h"
+#include "../libreadline/readline.h"
 #include "job.h"
 #include "utils.h"
 

@@ -4,7 +4,7 @@
 #include <limits.h>
 #include <stdbool.h>
 
-#include "readline.h"
+#include "../libreadline/readline.h"
 
 #define NR_JOBS			32
 

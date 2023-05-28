@@ -44,7 +44,7 @@ static int exec_rc()
 /*
  * Spwan a shell on tty.
  */
-static pid_t spawn_shell(int tty_num)
+static pid_t spawn_login(int tty_num)
 {
 	char tty[32];
 	pid_t pid;
@@ -73,8 +73,8 @@ static pid_t spawn_shell(int tty_num)
 		/* mark tty attached to this group */
 		tcsetpgrp(fd, pid);
 
-		/* exec a shell */
-		if (execl("/bin/sh", "sh", NULL, NULL) == -1)
+		/* exec login */
+		if (execl("/sbin/login", "login", NULL, NULL) == -1)
 			exit(0);
 	}
 
@@ -96,18 +96,18 @@ int main(void)
 	/* execute startup script */
 	exec_rc();
 
-	/* spawn a shell on each tty */
+	/* spawn login on each tty */
 	for (i = 0; i < NTTYS; i++)
-		ttys_pid[i] = spawn_shell(i + 1);
+		ttys_pid[i] = spawn_login(i + 1);
 
 	/* destroy zombie tasks */
 	for (;;) {
 		pid = waitpid(-1, NULL, 0);
 
-		/* if main shell exited, respawn it */
+		/* if login exited, respawn it */
 		for (i = 0; i < NTTYS; i++)
 			if (pid == ttys_pid[i])
-				ttys_pid[i] = spawn_shell(i + 1);
+				ttys_pid[i] = spawn_login(i + 1);
 	}
 
 	return 0;
