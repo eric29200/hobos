@@ -17,6 +17,9 @@ int abs(int val);
 int atoi(const char *s);
 
 char *getenv(const char *name);
+int setenv(const char *name, const char *value, int overwrite);
+int unsetenv(const char *name);
+int putenv(char *string);
 
 void qsort(void *base, size_t nmemb, size_t size, int (*compare)(const void *, const void *));
 

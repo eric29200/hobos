@@ -34,6 +34,11 @@ static void login(struct passwd *pwd)
 		chdir("/");
 	}
 
+	/* set environ */
+	setenv("USER", pwd->pw_name, 1);
+	setenv("HOME", pwd->pw_dir, 1);
+	setenv("SHELL", pwd->pw_shell, 1);
+
 	/* get shell name */
 	*sh_name = '-';
 	strncpy(sh_name + 1, pwd->pw_shell, PATH_MAX - 1);

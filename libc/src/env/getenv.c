@@ -2,6 +2,8 @@
 #include <unistd.h>
 #include <string.h>
 
+#include "__env_impl.h"
+
 char *getenv(const char *name)
 {
 	size_t len = strchrnul(name, '=') - name;

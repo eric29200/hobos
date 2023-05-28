@@ -30,6 +30,7 @@ static char homedir[PATH_MAX];
  */
 static void init_prompt_values()
 {
+	bool user_set = false, home_set = false;
 	struct passwd *passwd;
 	uid_t uid;
 	char *s;
@@ -44,18 +45,39 @@ static void init_prompt_values()
 
 	/* get user from env */
 	s = getenv("USER");
-	if (s) 
-		return;
+	if (s) {
+		strncpy(username, s, USERNAME_SIZE);
+		user_set = true;
+	}
+
+	/* get user from env */
+	s = getenv("HOME");
+	if (s) {
+		strncpy(homedir, s, PATH_MAX);
+		home_set = true;
+	}
 
 	/* get passwd */
-	uid = geteuid();
-	passwd = getpwuid(uid);
-	if (passwd) {
-		strncpy(username, passwd->pw_name, USERNAME_SIZE);
-		strncpy(homedir, passwd->pw_dir, PATH_MAX);
-	} else {
-		snprintf(username, USERNAME_SIZE, "%d", uid);
-		strncpy(homedir, ".", PATH_MAX);
+	if (!user_set || !home_set) {
+		/* get passwd */
+		uid = geteuid();
+		passwd = getpwuid(uid);
+
+		/* set user */
+		if (!user_set) {
+			if (passwd)
+				strncpy(username, passwd->pw_name, USERNAME_SIZE);
+			else
+				snprintf(username, USERNAME_SIZE, "%d", uid);
+		}
+
+		/* set homedir */
+		if (!home_set) {
+		 	if (passwd)
+				strncpy(homedir, passwd->pw_dir, PATH_MAX);
+			else
+				strncpy(homedir, "/", PATH_MAX);
+		}
 	}
 }
 
