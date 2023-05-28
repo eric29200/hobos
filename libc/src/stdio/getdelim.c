@@ -21,7 +21,7 @@ ssize_t getdelim(char **lineptr, size_t *size, int delim, FILE *fp)
 
 	/* init string */
 	if (!*lineptr)
-		*lineptr = NULL;
+		*size = 0;
 
 	for (;;) {
 		/* find delimiter in file buffer */
