@@ -24,6 +24,7 @@ extern char **environ;
 #define SYS_chmod		15
 #define SYS_lseek		19
 #define SYS_getpid		20
+#define SYS_setuid		23
 #define SYS_getuid		24
 #define SYS_access		33
 #define SYS_kill		37
@@ -33,6 +34,7 @@ extern char **environ;
 #define SYS_dup			41
 #define SYS_pipe		42
 #define SYS_brk			45
+#define SYS_setgid		46
 #define SYS_getgid		47
 #define SYS_geteuid		49
 #define SYS_getegid		50
@@ -94,6 +96,8 @@ int chdir(const char *path);
 int gethostname(char *name, size_t len);
 unsigned sleep(unsigned seconds);
 pid_t getpid();
+int setuid(uid_t uid);
+int setgid(gid_t gid);
 int setpgid(pid_t pid, pid_t pgid);
 int tcsetpgrp(int fd, pid_t pgrp);
 
