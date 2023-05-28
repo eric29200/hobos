@@ -35,7 +35,7 @@ int __putenv(char *var, size_t namelen, char *r)
 		if (i)
 			memcpy(newenv, environ, sizeof(char *) * i);
 
-		/* free old environ */	
+		/* free old environ */
 		free(oldenv);
 	}
 
