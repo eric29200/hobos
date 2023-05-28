@@ -58,7 +58,7 @@ int main()
 	struct passwd *pwd;
 
 	/* init readline context */
-	rline_init_ctx(&ctx);
+	rline_init_ctx(&ctx, 0);
 
 	for (;;) {
 		/* print prompt */

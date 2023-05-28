@@ -5,8 +5,6 @@
 #include <termios.h>
 #include <signal.h>
 
-#define RLINE_HISTORY_SIZE		50
-
 /*
  * Readline history entry.
  */
@@ -31,7 +29,7 @@ struct rline_ctx {
 	size_t				history_rpos;		/* history read position */
 };
 
-void rline_init_ctx(struct rline_ctx *ctx);
+void rline_init_ctx(struct rline_ctx *ctx, size_t history_capacity);
 void rline_exit_ctx(struct rline_ctx *ctx);
 ssize_t rline_readline(struct rline_ctx *ctx, char **line);
 

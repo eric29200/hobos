@@ -17,6 +17,7 @@
 #include "job.h"
 #include "utils.h"
 
+#define HISTORY_SIZE		50
 #define USERNAME_SIZE		1024
 #define HOSTNAME_SIZE		256
 
@@ -148,7 +149,7 @@ static int sh_interactive()
 		perror("SIGINT");
 
 	/* init readline context */
-	rline_init_ctx(&ctx);
+	rline_init_ctx(&ctx, HISTORY_SIZE);
 
 	for (;;) {
 		/* get current working directory */

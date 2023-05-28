@@ -397,7 +397,7 @@ err:
 /*
  * Init a readline context.
  */
-void rline_init_ctx(struct rline_ctx *ctx)
+void rline_init_ctx(struct rline_ctx *ctx, size_t history_capacity)
 {
 	size_t i;
 
@@ -405,12 +405,14 @@ void rline_init_ctx(struct rline_ctx *ctx)
 	memset(ctx, 0, sizeof(struct rline_ctx));
 
 	/* allocate history */
-	ctx->history = (struct rline_hist_entry **) malloc(sizeof(struct rline_hist_entry *) * RLINE_HISTORY_SIZE);
-	if (!ctx->history)
-		return;
+	if (history_capacity > 0) {
+		ctx->history = (struct rline_hist_entry **) malloc(sizeof(struct rline_hist_entry *) * history_capacity);
+		if (!ctx->history)
+			return;
+	}
 
 	/* reset history */
-	ctx->history_capacity = RLINE_HISTORY_SIZE;
+	ctx->history_capacity = history_capacity;
 	for (i = 0; i < ctx->history_capacity; i++)
 		ctx->history[i] = NULL;
 }
