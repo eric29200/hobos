@@ -10,9 +10,9 @@
 #define ALIAS_TABLE_GROW_SIZE		16
 
 /* alias table */
-static struct alias **alias_table = NULL;
 static size_t alias_table_capacity = 0;
-static size_t nr_alias = 0;
+struct alias **alias_table = NULL;
+size_t nr_alias = 0;
 
 /*
  * Free an alias.
@@ -26,35 +26,6 @@ static void alias_free(struct alias *alias)
 		if (alias->value)
 			free(alias->value);
 	}
-}
-
-/*
- * Remove an alias.
- */
-static bool alias_remove(const char *name)
-{
-	size_t i;
-
-	/* find alias and free it */
-	for (i = 0; i < nr_alias; i++) {
-		if (strcmp(alias_table[i]->name, name) == 0) {
-			alias_free(alias_table[i]);
-			break;
-		}
-	}
-
-	/* no matching alias */
-	if (i >= nr_alias)
-		return false;
-
-	/* shift remaining aliases */
-	for (; i < nr_alias - 1; i++)
-		alias_table[i] = alias_table[i + 1];
-
-	/* update number of aliases */
-	nr_alias--;
-
-	return true;
 }
 
 /*
@@ -88,7 +59,7 @@ static struct alias *alias_create(const char *name, char *value)
 /*
  * Add an alias.
  */
-static int alias_add(const char *name, char *value)
+int alias_add(const char *name, char *value)
 {
 	struct alias *alias;
 
@@ -115,6 +86,35 @@ static int alias_add(const char *name, char *value)
 }
 
 /*
+ * Remove an alias.
+ */
+bool alias_remove(const char *name)
+{
+	size_t i;
+
+	/* find alias and free it */
+	for (i = 0; i < nr_alias; i++) {
+		if (strcmp(alias_table[i]->name, name) == 0) {
+			alias_free(alias_table[i]);
+			break;
+		}
+	}
+
+	/* no matching alias */
+	if (i >= nr_alias)
+		return false;
+
+	/* shift remaining aliases */
+	for (; i < nr_alias - 1; i++)
+		alias_table[i] = alias_table[i + 1];
+
+	/* update number of aliases */
+	nr_alias--;
+
+	return true;
+}
+
+/*
  * Find an alias.
  */
 struct alias *alias_find(const char *name)
@@ -126,61 +126,4 @@ struct alias *alias_find(const char *name)
 			return alias_table[i];
 
 	return NULL;
-}
-
-/*
- * Do alias command.
- */
-int cmd_alias(int argc, char **argv)
-{
-	struct alias *alias;
-	char *name, *value;
-	size_t i;
-
-	/* print all aliases */
-	if (argc < 2) {
-		for (i = 0; i < nr_alias; i++)
-			printf("%s\t%s\n", alias_table[i]->name, alias_table[i]->value);
-
-		return 0;
-	}
-
-	/* get alias name */
-	name = argv[1];
-
-	/* print one alias */
-	if (argc == 2) {
-		alias = alias_find(name);
-		if (alias)
-			printf("%s\n", alias->value);
-
-		return 0;
-	}
-
-	/* alias alias forbidden */
-	if (strcmp(name, "alias") == 0) {
-		fprintf(stderr, "Cannot alias \"alias\"\n");
-		return -1;
-	}
-
-	/* concat arguments */
-	value = concat_args(argc - 2, argv + 2);
-	if (!value)
-		return -1;
-
-	/* add alias */
-	return alias_add(name, value);
-}
-
-/*
- * Do unalias command.
- */
-int cmd_unalias(int argc, char **argv)
-{
-	int i;
-
-	for (i = 1; i < argc; i++)
-		alias_remove(argv[i]);
-
-	return 0;
 }

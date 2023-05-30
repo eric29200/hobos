@@ -6,8 +6,10 @@
 #include <limits.h>
 #include <pwd.h>
 
+#include "builtin.h"
 #include "alias.h"
 #include "job.h"
+#include "utils.h"
 
 /*
  * Get home directory.
@@ -39,7 +41,7 @@ static int get_homedir(char *buf, size_t len)
 /*
  * Change dir command.
  */
-static int cmd_cd(int argc, char **argv)
+static int builtin_cd(int argc, char **argv)
 {
 	char homedir[PATH_MAX], *path;
 
@@ -63,7 +65,7 @@ static int cmd_cd(int argc, char **argv)
 /*
  * History command.
  */
-static int cmd_history(struct rline_ctx *ctx, int argc, char **argv)
+static int builtin_history(struct rline_ctx *ctx, int argc, char **argv)
 {
 	size_t i = ctx->history_size;
 	struct tm *tm;
@@ -90,7 +92,7 @@ static int cmd_history(struct rline_ctx *ctx, int argc, char **argv)
 /*
  * Jobs command.
  */
-static int cmd_jobs()
+static int builtin_jobs()
 {
 	int i;
 
@@ -100,11 +102,68 @@ static int cmd_jobs()
 
 	return 0;
 }
+
+/*
+ * Alias command.
+ */
+int builtin_alias(int argc, char **argv)
+{
+	struct alias *alias;
+	char *name, *value;
+	size_t i;
+
+	/* print all aliases */
+	if (argc < 2) {
+		for (i = 0; i < nr_alias; i++)
+			printf("%s\t%s\n", alias_table[i]->name, alias_table[i]->value);
+
+		return 0;
+	}
+
+	/* get alias name */
+	name = argv[1];
+
+	/* print one alias */
+	if (argc == 2) {
+		alias = alias_find(name);
+		if (alias)
+			printf("%s\n", alias->value);
+
+		return 0;
+	}
+
+	/* alias alias forbidden */
+	if (strcmp(name, "alias") == 0) {
+		fprintf(stderr, "Cannot alias \"alias\"\n");
+		return -1;
+	}
+
+	/* concat arguments */
+	value = concat_args(argc - 2, argv + 2);
+	if (!value)
+		return -1;
+
+	/* add alias */
+	return alias_add(name, value);
+}
+
+/*
+ * Unalias command.
+ */
+int builtin_unalias(int argc, char **argv)
+{
+	int i;
+
+	for (i = 1; i < argc; i++)
+		alias_remove(argv[i]);
+
+	return 0;
+}
  
 /*
  * Execute builtin command.
  */
-int cmd_builtin(struct rline_ctx *ctx, int argc, char **argv, int *status)
+int builtin(struct rline_ctx *ctx, int argc, char **argv, int *status)
 {
 	/* exit command */
 	if (strcmp(argv[0], "exit") == 0)
@@ -112,31 +171,31 @@ int cmd_builtin(struct rline_ctx *ctx, int argc, char **argv, int *status)
 
 	/* cd command */
 	if (strcmp(argv[0], "cd") == 0) {
-		*status = cmd_cd(argc, argv);
+		*status = builtin_cd(argc, argv);
 		return 0;
 	}
 
 	/* history command */
 	if (strcmp(argv[0], "history") == 0) {
-		*status = cmd_history(ctx, argc, argv);
+		*status = builtin_history(ctx, argc, argv);
 		return 0;
 	}
 
 	/* alias command */
 	if (strcmp(argv[0], "alias") == 0) {
-		*status = cmd_alias(argc, argv);
+		*status = builtin_alias(argc, argv);
 		return 0;
 	}
 
 	/* unalias command */
 	if (strcmp(argv[0], "unalias") == 0) {
-		*status = cmd_unalias(argc, argv);
+		*status = builtin_unalias(argc, argv);
 		return 0;
 	}
 
 	/* jobs command */
 	if (strcmp(argv[0], "jobs") == 0) {
-		*status = cmd_jobs();
+		*status = builtin_jobs();
 		return 0;
 	}
 

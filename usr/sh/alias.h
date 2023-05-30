@@ -1,6 +1,7 @@
 #ifndef _SH_ALIAS_H_
 #define _SH_ALIAS_H_
 
+#include <stdbool.h>
 #include <limits.h>
 
 /*
@@ -11,8 +12,11 @@ struct alias {
 	char *		value;		/* alias value */
 };
 
+extern struct alias **alias_table;
+extern size_t nr_alias;
+
 struct alias *alias_find(const char *name);
-int cmd_alias(int argc, char **argv);
-int cmd_unalias(int argc, char **argv);
+int alias_add(const char *name, char *value);
+bool alias_remove(const char *name);
 
 #endif
