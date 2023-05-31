@@ -14,8 +14,9 @@
 
 #include "../libutils/libutils.h"
 #include "../libreadline/readline.h"
-#include "job.h"
+#include "pipeline.h"
 #include "utils.h"
+#include "job.h"
 
 #define HISTORY_SIZE		50
 #define USERNAME_SIZE		1024
@@ -83,24 +84,6 @@ static void init_prompt_values()
 }
 
 /*
- * Execute a command line.
- */
-static int execute_cmdline(struct rline_ctx *ctx, char *cmd_line)
-{
-	int nr_cmds, i, ret = 0;
-	char *cmds[ARG_MAX];
-
-	/* parse commands */
-	nr_cmds = tokenize(cmd_line, cmds, ARG_MAX, ";");
-
-	/* submit jobs */
-	for (i = 0; i < nr_cmds; i++)
-		ret |= job_submit(cmds[i], ctx);
-
-	return ret;
-}
-
-/*
  * SIGINT handler.
  */
 static void sigint_handler()
@@ -138,9 +121,13 @@ static void sigchld_handler()
 static int sh_interactive()
 {
 	char *cmd_line = NULL;
+	struct pipeline line;
 	struct rline_ctx ctx;
 	struct tm *tm;
 	time_t t;
+
+	/* reset pipeline */
+	memset(&line, 0, sizeof(struct pipeline));
 
 	/* install signal handlers */
 	if (signal(SIGINT, sigint_handler))
@@ -168,8 +155,12 @@ static int sh_interactive()
 		if (rline_readline(&ctx, &cmd_line) <= 0)
 			continue;
 
-		/* execute command */
-		execute_cmdline(&ctx, cmd_line);
+		/* parse/execute command line */
+		if (pipeline_parse(&line, cmd_line) == 0)
+			pipeline_execute(&line, &ctx);
+
+		/* clear pipeline */
+		pipeline_clear(&line);
 	}
 
 	/* free command line */
@@ -188,9 +179,13 @@ static int sh_interactive()
 static int sh_script(const char *filename)
 {
 	char *cmd_line = NULL;
+	struct pipeline line;
 	size_t n = 0;
 	ssize_t len;
 	FILE *fp;
+
+	/* reset pipeline */
+	memset(&line, 0, sizeof(struct pipeline));
 
 	/* open input file */
 	fp = fopen(filename, "r");
@@ -205,8 +200,12 @@ static int sh_script(const char *filename)
 		if (cmd_line[len - 1] == '\n')
 			cmd_line[len - 1] = 0;
 
-		/* execute command */
-		execute_cmdline(NULL, cmd_line);
+		/* parse/execute command line */
+		if (pipeline_parse(&line, cmd_line) == 0)
+			pipeline_execute(&line, NULL);
+
+		/* clear pipeline */
+		pipeline_clear(&line);
 	}
 
 	/* free command line */

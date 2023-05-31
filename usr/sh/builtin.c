@@ -8,8 +8,8 @@
 
 #include "builtin.h"
 #include "alias.h"
-#include "job.h"
 #include "utils.h"
+#include "job.h"
 
 /*
  * Get home directory.
@@ -90,20 +90,6 @@ static int builtin_history(struct rline_ctx *ctx, int argc, char **argv)
 }
 
 /*
- * Jobs command.
- */
-static int builtin_jobs()
-{
-	int i;
-
-	for (i = 0; i < NR_JOBS; i++)
-		if (job_table[i].id)
-			printf("[%d]\t%s\n", job_table[i].id, job_table[i].cmdline);
-
-	return 0;
-}
-
-/*
  * Alias command.
  */
 int builtin_alias(int argc, char **argv)
@@ -156,6 +142,20 @@ int builtin_unalias(int argc, char **argv)
 
 	for (i = 1; i < argc; i++)
 		alias_remove(argv[i]);
+
+	return 0;
+}
+
+/*
+ * Jobs command.
+ */
+static int builtin_jobs()
+{
+	int i;
+
+	for (i = 0; i < NR_JOBS; i++)
+		if (job_table[i].id)
+			printf("[%d]\t%s\n", job_table[i].id, job_table[i].cmdline);
 
 	return 0;
 }

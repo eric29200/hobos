@@ -4,6 +4,7 @@
 #include <ctype.h>
 
 #include "alias.h"
+#include "mem.h"
 
 /*
  * Concat arguments.
@@ -22,9 +23,7 @@ char *concat_args(int argc, char **argv)
 	len += argc - 1;
 
 	/* allocate string */
-	s = buf = (char *) malloc(len + 1);
-	if (!buf)
-		return NULL;
+	s = buf = xmalloc(len + 1);
 
 	/* concat args */
 	while (argc-- > 0) {

@@ -6,6 +6,7 @@
 
 #include "alias.h"
 #include "utils.h"
+#include "mem.h"
 
 #define ALIAS_TABLE_GROW_SIZE		16
 
@@ -36,21 +37,11 @@ static struct alias *alias_create(const char *name, char *value)
 	struct alias *alias;
 
 	/* allocate a new alias */
-	alias = (struct alias *) malloc(sizeof(struct alias));
-	if (!alias)
-		return NULL;
-
-	/* reset alias */
+	alias = xmalloc(sizeof(struct alias));
 	memset(alias, 0, sizeof(struct alias));
 
-	/* set name */
-	alias->name = strdup(name);
-	if (!alias->name) {
-		alias_free(alias);
-		return NULL;
-	}
-
-	/* set value */
+	/* set alias */
+	alias->name = xstrdup(name);
 	alias->value = value;
 
 	return alias;
@@ -69,9 +60,7 @@ int alias_add(const char *name, char *value)
 	/* grow alias table if needed */
 	if (nr_alias + 1 >= alias_table_capacity) {
 		alias_table_capacity += ALIAS_TABLE_GROW_SIZE;
-		alias_table = (struct alias **) realloc(alias_table, sizeof(struct alias *) * alias_table_capacity);
-		if (!alias_table)
-			return -1;
+		alias_table = xrealloc(alias_table, sizeof(struct alias *) * alias_table_capacity);
 	}
 
 	/* create new alias */
