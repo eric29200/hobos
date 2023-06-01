@@ -26,20 +26,23 @@ void job_free(struct job *job)
 /*
  * Submit a job.
  */
-struct job *job_submit(struct command *command, struct rline_ctx *ctx)
+int job_submit(struct command *command, struct rline_ctx *ctx, struct job **ret_job)
 {
 	sigset_t set, set_old;
 	struct job *job;
 	int i, ret;
 	pid_t pid;
 
+	/* set return job */
+	*ret_job = NULL;
+
 	/* empty command */
 	if (!command->argc)
-		return NULL;
+		return 0;
 
 	/* try builtin command */
 	if (builtin(ctx, command->argc, command->argv, &ret) == 0)
-		return NULL;
+		return 0;
 
 	/* find a free job */
 	for (i = 0; i < NR_JOBS; i++)
@@ -48,7 +51,7 @@ struct job *job_submit(struct command *command, struct rline_ctx *ctx)
 
 	/* no free job */
 	if (i >= NR_JOBS)
-		return NULL;
+		return -1;
 
 	/* set job */
 	job = &job_table[i];
@@ -68,7 +71,7 @@ struct job *job_submit(struct command *command, struct rline_ctx *ctx)
 	if (pid < 0) {
 		perror("fork");
 		job_free(job);
-		return NULL;
+		return -1;
 	}
 
 	/* child process */
@@ -84,9 +87,10 @@ struct job *job_submit(struct command *command, struct rline_ctx *ctx)
 
 	/* set job's pid */
 	job->pid = pid;
+	*ret_job = job;
 
 	/* restore signals */
 	sigprocmask(SIG_SETMASK, &set_old, NULL);
 
-	return job;
+	return 0;
 }

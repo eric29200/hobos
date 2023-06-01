@@ -22,7 +22,7 @@ struct job {
 /* job table */
 extern struct job job_table[NR_JOBS];
 
-struct job *job_submit(struct command *command, struct rline_ctx *ctx);
+int job_submit(struct command *command, struct rline_ctx *ctx, struct job **ret_job);
 void job_free(struct job *job);
 
 #endif

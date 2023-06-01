@@ -100,5 +100,6 @@ int setuid(uid_t uid);
 int setgid(gid_t gid);
 int setpgid(pid_t pid, pid_t pgid);
 int tcsetpgrp(int fd, pid_t pgrp);
+int pipe(int pipefd[2]);
 
 #endif

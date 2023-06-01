@@ -7,6 +7,7 @@
 #include <sys/wait.h>
 
 #include "pipeline.h"
+#include "redir.h"
 #include "job.h"
 #include "mem.h"
 
@@ -112,97 +113,50 @@ int pipeline_parse(struct pipeline *line, char *cmdline)
 	return 0;
 }
 
-static int redir_input(struct command *command)
-{
-	int fd_in, ret;
-
-	if (!command->input)
-		return STDIN_FILENO;
-
-	/* open input file */
-	fd_in = open(command->input, O_RDONLY, 0);
-	if (fd_in < 0) {
-		perror(command->input);
-		return -1;
-	}
-
-	/* save stdin */
-	ret = dup(STDIN_FILENO);
-	if (ret < 0) {
-		close(fd_in);
-		return -1;
-	}
-
-	/* replace stdin */
-	dup2(fd_in, STDIN_FILENO);
-
-	return ret;
-}
-
-static int redir_output(struct command *command)
-{
-	int fd_out, ret;
-
-	if (!command->output)
-		return STDOUT_FILENO;
-
-	/* open output file */
-	fd_out = open(command->output, O_CREAT | O_TRUNC | O_WRONLY, 0644);
-	if (fd_out < 0) {
-		perror(command->output);
-		return -1;
-	}
-
-	/* save stdout */
-	ret = dup(STDOUT_FILENO);
-	if (ret < 0) {
-		close(fd_out);
-		return -1;
-	}
-
-	/* replace stdout */
-	dup2(fd_out, STDOUT_FILENO);
-
-	return ret;
-}
-
 /*
  * Execute a pipeline.
  */
 int pipeline_execute(struct pipeline *line, struct rline_ctx *ctx)
 {
-	int ret = 0, status, fd_stdin, fd_stdout;
-	struct command *command;
+	int ret = 0, status, fd_stdin, fd_stdout, pipefd[2];
+	struct command *command, *command_prev;
 	struct job *job;
 	size_t i;
 
 	for (i = 0; i < line->cmds_size; i++) {
 		/* get command */
+		command_prev = i == 0 ? NULL : &line->cmds[i - 1];
 		command = &line->cmds[i];
 
-		/* redir input */
-		fd_stdin = redir_input(command);
+		/* reset input/output */
+		fd_stdin = STDIN_FILENO;
+		fd_stdout = STDOUT_FILENO;
+
+		/* input redirection */
+		fd_stdin = redir_input(command, command_prev, pipefd);
 		if (fd_stdin < 0) {
 			ret = -1;
 			goto next;
 		}
 
-		/* redir output */
-		fd_stdout = redir_output(command);
+		/* output redirection */
+		fd_stdout = redir_output(command, pipefd);
 		if (fd_stdout < 0) {
 			ret = -1;
 			goto next;
 		}
 
 		/* submit job */
-		job = job_submit(command, ctx);
-		if (!job) {
-			ret = -1;
+		ret = job_submit(command, ctx, &job);
+		if (ret)
 			goto next;
-		}
+
+		/* no job : continue */
+		if (!job)
+			goto next;
 
 		/* wait for job */
-		if (command->end_char != '&') {
+		if (command->end_char != '&' && command->end_char != '|') {
 			/* wait for job */
 			while ((ret = waitpid(job->pid, &status, 0)) == 0);
 
@@ -212,6 +166,7 @@ int pipeline_execute(struct pipeline *line, struct rline_ctx *ctx)
 
 			/* free job */	
 			job_free(job);
+			ret = 0;
 		}
 
 next:
@@ -226,6 +181,10 @@ next:
 			close(STDOUT_FILENO);
 			dup2(fd_stdout, STDOUT_FILENO);
 		}
+
+		/* exit on error */
+		if (ret)
+			break;
 	}
 
 	return ret;
