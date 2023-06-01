@@ -3,8 +3,11 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <ctype.h>
+#include <errno.h>
+#include <sys/wait.h>
 
 #include "pipeline.h"
+#include "job.h"
 #include "mem.h"
 
 /*
@@ -168,8 +171,9 @@ static int redir_output(struct command *command)
  */
 int pipeline_execute(struct pipeline *line, struct rline_ctx *ctx)
 {
-	int ret = 0, fd_stdin, fd_stdout;
+	int ret = 0, status, fd_stdin, fd_stdout;
 	struct command *command;
+	struct job *job;
 	size_t i;
 
 	for (i = 0; i < line->cmds_size; i++) {
@@ -190,8 +194,25 @@ int pipeline_execute(struct pipeline *line, struct rline_ctx *ctx)
 			goto next;
 		}
 
-		/* execute command */
-		ret |= command_execute(command, ctx);
+		/* submit job */
+		job = job_submit(command, ctx);
+		if (!job) {
+			ret = -1;
+			goto next;
+		}
+
+		/* wait for job */
+		if (command->end_char != '&') {
+			/* wait for job */
+			while ((ret = waitpid(job->pid, &status, 0)) == 0);
+
+			/* no matching child : sigchld probably got it */
+			if (ret < 0 && errno != ECHILD)
+				perror("waitpid");
+
+			/* free job */	
+			job_free(job);
+		}
 
 next:
 		/* restore stdin */

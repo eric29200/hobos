@@ -107,7 +107,8 @@ static void sigchld_handler()
 	for (i = 0; i < NR_JOBS; i++) {
 		if (job_table[i].pid == pid) {
 			/* print ending message */
-			printf("[%d]\tDone\t%s\n", job_table[i].id, job_table[i].cmdline);
+			if (job_table[i].bg)
+				printf("[%d]\tDone\t%s\n", job_table[i].id, job_table[i].cmdline);
 
 			/* free job */
 			job_free(&job_table[i]);

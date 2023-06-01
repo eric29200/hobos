@@ -20,6 +20,5 @@ struct command {
 
 int command_parse(struct command *command, char *cmd, size_t cmdlen);
 void command_clear(struct command *command);
-int command_execute(struct command *command, struct rline_ctx *ctx);
 
 #endif
