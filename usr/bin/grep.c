@@ -79,19 +79,11 @@ static bool search(char *str, const char *word, int flags)
 /*
  * Grep a word in a file.
  */
-static int grep(const char *word, const char *filename, int flags)
+static int grep(FILE *fp, const char *word, const char *filename, int flags)
 {
 	char buf[BUFSIZ];
 	int line = 0;
 	size_t len;
-	FILE *fp;
-
-	/* open file */
-	fp = fopen(filename, "r");
-	if (!fp) {
-		perror(filename);
-		return 1;
-	}
 
 	/* read all file */
 	while (fgets(buf, BUFSIZ, fp)) {
@@ -101,7 +93,7 @@ static int grep(const char *word, const char *filename, int flags)
 		/* line must be '\n' terminated */
 		len = strlen(buf);
 		if (*(buf + len - 1) != '\n')
-			goto out;
+			break;
 
 		/* search word in line */
 		if (search(buf, word, flags)) {
@@ -117,8 +109,6 @@ static int grep(const char *word, const char *filename, int flags)
 		}
 	}
 
-out:
-	fclose(fp);
 	return 0;
 }
 
@@ -146,6 +136,7 @@ int main(int argc, char **argv)
 	const char *name = argv[0];
 	int flags = 0, ret, c;
 	char *word;
+	FILE *fp;
 
 	/* get options */
 	while ((c = getopt_long(argc, argv, "in", long_opts, NULL)) != -1) {
@@ -171,7 +162,7 @@ int main(int argc, char **argv)
 	argv += optind;
 
 	/* check arguments */
-	if (argc < 2) {
+	if (!argc) {
 		usage(name);
 		exit(1);
 	}
@@ -180,9 +171,26 @@ int main(int argc, char **argv)
 	word = *argv++;
 	argc--;
 
+	/* grep stdin */
+	if (!argc)
+		return grep(stdin, word, "stdin", flags);
+
 	/* grep in all files */
 	while (argc-- > 0) {
-		ret = grep(word, *argv++, flags);
+		/* open file */
+		fp = fopen(*argv, "r");
+		if (!fp) {
+			perror(*argv);
+			return 1;
+		}
+
+		/* grep file */
+		ret = grep(fp, word, *argv++, flags);
+
+		/* close file */
+		fclose(fp);
+
+		/* exit on error */
 		if (ret)
 			return ret;
 	}
