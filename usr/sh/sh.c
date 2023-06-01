@@ -100,18 +100,22 @@ static void sigchld_handler()
 	int status, i;
 	pid_t pid;
 
-	/* get terminated process */
-	pid = waitpid(-1, &status, 1);
+	for (;;) {
+		/* get terminated process */
+		pid = waitpid(-1, &status, WNOHANG);
+		if (pid < 0)
+			break;
 
-	/* free matching job */
-	for (i = 0; i < NR_JOBS; i++) {
-		if (job_table[i].pid == pid) {
-			/* print ending message */
-			if (job_table[i].bg)
-				printf("[%d]\tDone\t%s\n", job_table[i].id, job_table[i].cmdline);
+		/* free matching job */
+		for (i = 0; i < NR_JOBS; i++) {
+			if (job_table[i].pid == pid) {
+				/* print ending message */
+				if (job_table[i].bg)
+					printf("[%d]\tDone\t%s\n", job_table[i].id, job_table[i].cmdline);
 
-			/* free job */
-			job_free(&job_table[i]);
+				/* free job */
+				job_free(&job_table[i]);
+			}
 		}
 	}
 }
@@ -162,6 +166,9 @@ static int sh_interactive()
 
 		/* clear pipeline */
 		pipeline_clear(&line);
+
+		/* handle terminated jobs */
+		sigchld_handler();
 	}
 
 	/* free command line */
@@ -207,6 +214,9 @@ static int sh_script(const char *filename)
 
 		/* clear pipeline */
 		pipeline_clear(&line);
+
+		/* handle terminated jobs */
+		sigchld_handler();
 	}
 
 	/* free command line */
