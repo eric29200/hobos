@@ -16,9 +16,10 @@
 #define PROC_LOADAVG_INO	8
 #define PROC_PID_INO		9
 #define PROC_PID_STAT_INO	10
-#define PROC_PID_CMDLINE_INO	11
-#define PROC_PID_ENVIRON_INO	12
-#define PROC_PID_FD_INO		13
+#define PROC_PID_STATUS_INO	11
+#define PROC_PID_CMDLINE_INO	12
+#define PROC_PID_ENVIRON_INO	13
+#define PROC_PID_FD_INO		14
 
 /*
  * Procfs dir entry.
@@ -49,6 +50,7 @@ extern struct inode_operations_t proc_self_iops;
 extern struct inode_operations_t proc_kstat_iops;
 extern struct inode_operations_t proc_meminfo_iops;
 extern struct inode_operations_t proc_stat_iops;
+extern struct inode_operations_t proc_status_iops;
 extern struct inode_operations_t proc_cmdline_iops;
 extern struct inode_operations_t proc_environ_iops;
 extern struct inode_operations_t proc_fd_iops;

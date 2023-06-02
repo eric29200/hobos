@@ -14,6 +14,7 @@ static struct proc_dir_entry_t base_dir[] = {
 	{ PROC_PID_INO,		1,	"." },
 	{ PROC_ROOT_INO,	2,	".." },
 	{ PROC_PID_STAT_INO,	4,	"stat" },
+	{ PROC_PID_STATUS_INO,	6,	"status" },
 	{ PROC_PID_CMDLINE_INO,	7,	"cmdline" },
 	{ PROC_PID_ENVIRON_INO,	7,	"environ" },
 	{ PROC_PID_FD_INO,	2,	"fd" },
@@ -27,6 +28,16 @@ static char proc_states[] = {
 	'S',				/* sleeping */
 	'T',				/* stopped */
 	'Z',				/* zombie */
+};
+
+/*
+ * Process states.
+ */
+static char *proc_states_long[] = {
+	"R (running)",			/* running */
+	"S (sleeping)",			/* sleeping */
+	"T (stopped)",			/* stopped */
+	"Z (zombie)",			/* zombie */
 };
 
 /*
@@ -90,6 +101,65 @@ struct file_operations_t proc_stat_fops = {
  */
 struct inode_operations_t proc_stat_iops = {
 	.fops		= &proc_stat_fops,
+};
+
+
+/*
+ * Read process stat.
+ */
+static int proc_status_read(struct file_t *filp, char *buf, int count)
+{
+	struct task_t *task;
+	char tmp_buf[1024];
+	size_t len;
+	pid_t pid;
+
+	/* get process */
+	pid = filp->f_inode->i_ino >> 16;
+	task = find_task(pid);
+	if (!task)
+		return -EINVAL;
+
+	/* print informations in temporary buffer */
+	len = sprintf(tmp_buf,	"Name:\t%s\n"
+				"State:\t%s\n"
+				"Pid:\t%d\n"
+				"PPid:\t%d\n"
+				"Uid:\t%d\t%d\t%d\n"
+				"Gid:\t%d\t%d\t%d\n",
+				task->name,
+				proc_states_long[task->state - 1],
+				task->pid,
+				task->parent ? task->parent->pid : task->pid,
+				task->uid, task->euid, task->suid,
+				task->gid, task->egid, task->sgid);
+
+	/* file position after end */
+	if (filp->f_pos >= len)
+		return 0;
+
+	/* update count */
+	if (filp->f_pos + count > len)
+		count = len - filp->f_pos;
+
+	/* copy content to user buffer and update file position */
+	memcpy(buf, tmp_buf + filp->f_pos, count);
+	filp->f_pos += count;
+
+	return count;
+}
+/*
+ * Status file operations.
+ */
+struct file_operations_t proc_status_fops = {
+	.read		= proc_status_read,
+};
+
+/*
+ * Status inode operations.
+ */
+struct inode_operations_t proc_status_iops = {
+	.fops		= &proc_status_fops,
 };
 
 /*
