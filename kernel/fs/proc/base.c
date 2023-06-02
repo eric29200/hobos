@@ -125,14 +125,14 @@ static int proc_status_read(struct file_t *filp, char *buf, int count)
 				"State:\t%s\n"
 				"Pid:\t%d\n"
 				"PPid:\t%d\n"
-				"Uid:\t%d\t%d\t%d\n"
-				"Gid:\t%d\t%d\t%d\n",
+				"Uid:\t%d\n"
+				"Gid:\t%d\n",
 				task->name,
 				proc_states_long[task->state - 1],
 				task->pid,
 				task->parent ? task->parent->pid : task->pid,
-				task->uid, task->euid, task->suid,
-				task->gid, task->egid, task->sgid);
+				task->uid,
+				task->gid);
 
 	/* file position after end */
 	if (filp->f_pos >= len)
