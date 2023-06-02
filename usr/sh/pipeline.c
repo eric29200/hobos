@@ -164,7 +164,7 @@ int pipeline_execute(struct pipeline *line, struct rline_ctx *ctx)
 			if (ret < 0 && errno != ECHILD)
 				perror("waitpid");
 
-			/* free job */	
+			/* free job */
 			job_free(job);
 			ret = 0;
 		}

@@ -118,9 +118,9 @@ static int grep(FILE *fp, const char *word, const char *filename, int flags)
 static void usage(const char *name)
 {
 	fprintf(stderr, "Usage: %s [-in] string file1 [file2 ...]\n", name);
-	fprintf(stderr, "\t-i, --ignore-case\t\tignore case\n");
-	fprintf(stderr, "\t-n, --line-number\t\tprefix each line with the line number within its input file\n");
-	fprintf(stderr, "\t  , --help\t\t\tprint help and exit\n");
+	fprintf(stderr, "      , --help           print help and exit\n");
+	fprintf(stderr, "    -i, --ignore-case    ignore case\n");
+	fprintf(stderr, "    -n, --line-number    prefix each line with the line number within its input file\n");
 }
 
 /* options */

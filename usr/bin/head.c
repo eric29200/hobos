@@ -50,8 +50,8 @@ static int head(FILE *fp, const char *filename, size_t nr_lines)
 static void usage(const char *name)
 {
 	fprintf(stderr, "Usage: [-n] [file ...]\n", name);
-	fprintf(stderr, "\t  , --help\t\t\tprint help and exit\n");
-	fprintf(stderr, "\t-n, --lines=N\t\t\tprint N first lines\n");
+	fprintf(stderr, "      , --help        print help and exit\n");
+	fprintf(stderr, "    -n, --lines=N     print N first lines\n");
 }
 
 /* options */

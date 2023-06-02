@@ -102,9 +102,9 @@ static void print_signals()
 static void usage(const char *name)
 {
 	fprintf(stderr, "Usage: %s target name\n", name);
-	fprintf(stderr, "\t  , --help\t\tprint help and exit\n");
-	fprintf(stderr, "\t-s, --signal=signal\tsignal to send (name or numer)\n");
-	fprintf(stderr, "\t-l, --list\tprint a list of signal names\n");
+	fprintf(stderr, "      , --help             print help and exit\n");
+	fprintf(stderr, "    -s, --signal=signal    signal to send (name or numer)\n");
+	fprintf(stderr, "    -l, --list             print a list of signal names\n");
 }
 
 /* options */

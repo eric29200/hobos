@@ -14,9 +14,9 @@
 static void usage(const char *name)
 {
 	fprintf(stderr, "Usage: %s [-LP]\n", name);
-	fprintf(stderr, "\t  , --help\t\tprint help and exit\n");
-	fprintf(stderr, "\t-L, --logical\t\tuse PWD from environment\n");
-	fprintf(stderr, "\t-P, --physical\t\tavoid symbolic links\n");
+	fprintf(stderr, "      , --help        print help and exit\n");
+	fprintf(stderr, "    -L, --logical     use PWD from environment\n");
+	fprintf(stderr, "    -P, --physical    avoid symbolic links\n");
 }
 
 /* options */

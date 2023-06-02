@@ -27,7 +27,7 @@ int redir_input(struct command *command, struct command *command_prev, int pipef
 
 		goto end;
 	}
-	
+
 	/* no redirection */
 	return STDIN_FILENO;
 end:

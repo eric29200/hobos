@@ -89,10 +89,10 @@ static int wc(FILE *fp, const char *filename, int flags)
 static void usage(const char *name)
 {
 	fprintf(stderr, "Usage: %s [-cwl] [file ...]\n", name);
-	fprintf(stderr, "\t  , --help\t\tprint help and exit\n");
-	fprintf(stderr, "\t-c, --bytes\t\tprint number of bytes\n");
-	fprintf(stderr, "\t-w, --words\t\tprint number of words\n");
-	fprintf(stderr, "\t-l, --lines\t\tprint number of lines\n");
+	fprintf(stderr, "      , --help     print help and exit\n");
+	fprintf(stderr, "    -c, --bytes    print number of bytes\n");
+	fprintf(stderr, "    -w, --words    print number of words\n");
+	fprintf(stderr, "    -l, --lines    print number of lines\n");
 }
 
 /* options */

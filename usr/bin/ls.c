@@ -558,20 +558,20 @@ static void set_formats(struct stack_t *stack, int flags)
 static void usage(const char *name)
 {
 	fprintf(stderr, "Usage: %s [-ldiaAF1RtSrU] [name ...]\n", name);
-	fprintf(stderr, "\t  , --help\t\t\tprint help and exit\n");
-	fprintf(stderr, "\t-l,\t\t\t\tuse a long listing format\n");
-	fprintf(stderr, "\t-d, --directory\t\t\tlist directories themselves, not their contents\n");
-	fprintf(stderr, "\t-i, --inode\t\t\tprint the inode number of each file\n");
-	fprintf(stderr, "\t-a, --all\t\t\tdo not ignore entries starting with .\n");
-	fprintf(stderr, "\t-A, --almost-all\t\tdo not list implied . and ..\n");
-	fprintf(stderr, "\t-F, --classify\t\t\tappend class indicator\n");
-	fprintf(stderr, "\t-1,\t\t\t\tlist one file per line\n");
-	fprintf(stderr, "\t-R, --recursive\t\t\tlist subdirectories recursiverly\n");
-	fprintf(stderr, "\t-t,\t\t\t\tsort by time\n");
-	fprintf(stderr, "\t-S,\t\t\t\tsort by size\n");
-	fprintf(stderr, "\t-r, --reverse\t\t\treverse order while sorting\n");
-	fprintf(stderr, "\t-U,\t\t\t\tdo not sort\n");
-	fprintf(stderr, "\t-h, --human-readable\t\tprint sizes in human readable format\n");
+	fprintf(stderr, "      , --help              print help and exit\n");
+	fprintf(stderr, "    -l,                     use a long listing format\n");
+	fprintf(stderr, "    -d, --directory         list directories themselves, not their contents\n");
+	fprintf(stderr, "    -i, --inode             print the inode number of each file\n");
+	fprintf(stderr, "    -a, --all               do not ignore entries starting with .\n");
+	fprintf(stderr, "    -A, --almost-all        do not list implied . and ..\n");
+	fprintf(stderr, "    -F, --classify          append class indicator\n");
+	fprintf(stderr, "    -1,                     list one file per line\n");
+	fprintf(stderr, "    -R, --recursive         list subdirectories recursiverly\n");
+	fprintf(stderr, "    -t,                     sort by time\n");
+	fprintf(stderr, "    -S,                     sort by size\n");
+	fprintf(stderr, "    -r, --reverse           reverse order while sorting\n");
+	fprintf(stderr, "    -U,                     do not sort\n");
+	fprintf(stderr, "    -h, --human-readable    print sizes in human readable format\n");
 }
 
 /* options */

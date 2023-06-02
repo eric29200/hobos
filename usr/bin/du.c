@@ -115,11 +115,11 @@ static int du(const char *filename, int flags, int follow, int level, off_t *siz
 static void usage(const char *name)
 {
 	fprintf(stderr, "Usage: %s [-hHLP] [file ...]\n", name);
-	fprintf(stderr, "\t  , --help\t\t\tprint help and exit\n");
-	fprintf(stderr, "\t-h, --human-readable\t\tprint sizes in human readable format\n");
-	fprintf(stderr, "\t-H, --dereference-args\t\tdereference only symlinks from command line\n");
-	fprintf(stderr, "\t-L, --dereference\t\tderference all symbolic links\n");
-	fprintf(stderr, "\t-P, --no-dereference\t\tdon't follow any symbolic links (default)\n");
+	fprintf(stderr, "      , --help                print help and exit\n");
+	fprintf(stderr, "    -h, --human-readable      print sizes in human readable format\n");
+	fprintf(stderr, "    -H, --dereference-args    dereference only symlinks from command line\n");
+	fprintf(stderr, "    -L, --dereference         derference all symbolic links\n");
+	fprintf(stderr, "    -P, --no-dereference      don't follow any symbolic links (default)\n");
 }
 
 /* options */

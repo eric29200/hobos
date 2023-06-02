@@ -13,8 +13,8 @@
 static void usage(const char *name)
 {
 	fprintf(stderr, "Usage: %s [-c] file [...]\n", name);
-	fprintf(stderr, "\t-c, --no-create\t\tdo not create any files\n");
-	fprintf(stderr, "\t  , --help\t\tprint help and exit\n");
+	fprintf(stderr, "      , --help         print help and exit\n");
+	fprintf(stderr, "    -c, --no-create    do not create any files\n");
 }
 
 /* options */

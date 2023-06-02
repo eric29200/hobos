@@ -20,6 +20,7 @@
 static void usage(const char *name)
 {
 	fprintf(stderr, "Usage: %s [-RvfapHLP] source [...] target\n", name);
+	fprintf(stderr, "      , --help        print help and exit\n");
 	fprintf(stderr, "\t  , --help\t\t\tprint help and exit\n");
 	fprintf(stderr, "\t-R, --recursive\t\t\tcopy directories recursiverly\n");
 	fprintf(stderr, "\t-v, --verbose\t\t\texplain what is being done\n");

@@ -42,8 +42,8 @@ static int rm_dir(const char *name, int parent)
 static void usage(const char *name)
 {
 	fprintf(stderr, "Usage: %s [-p] directory [...]\n", name);
-	fprintf(stderr, "\t-p, --parents\t\tremove directory and its parents\n");
-	fprintf(stderr, "\t  , --help\t\tprint help and exit\n");
+	fprintf(stderr, "      , --help       print help and exit\n");
+	fprintf(stderr, "    -p, --parents    remove directory and its parents\n");
 }
 
 /* options */

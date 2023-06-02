@@ -28,8 +28,8 @@ static bool isdir(const char *name)
 static void usage(const char *name)
 {
 	fprintf(stderr, "Usage: %s [-s] link_target link_name\n", name);
-	fprintf(stderr, "\t-s, --symbolic\t\tcreate symbolic links\n");
-	fprintf(stderr, "\t  , --help\t\tprint help and exit\n");
+	fprintf(stderr, "      , --help        print help and exit\n");
+	fprintf(stderr, "    -s, --symbolic    create symbolic links\n");
 }
 
 /* options */

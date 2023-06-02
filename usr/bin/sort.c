@@ -73,8 +73,8 @@ static int compar_line(const void *a1, const void *a2)
 static void usage(const char *name)
 {
 	fprintf(stderr, "Usage: %s [-r] [file ...]\n", name);
-	fprintf(stderr, "\t  , --help\t\tprint help and exit\n");
-	fprintf(stderr, "\t-r, --reverse\t\treverse the result of comparisons\n");
+	fprintf(stderr, "      , --help       print help and exit\n");
+	fprintf(stderr, "    -r, --reverse    reverse the result of comparisons\n");
 }
 
 /* options */

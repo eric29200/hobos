@@ -31,8 +31,8 @@ static int write_full(int fd, char *buf, size_t len)
 static void usage(const char *name)
 {
 	fprintf(stderr, "Usage: %s [-a] [file ...]\n", name);
-	fprintf(stderr, "\t-a, --append\t\tappend to files\n");
-	fprintf(stderr, "\t  , --help\t\tprint help and exit\n");
+	fprintf(stderr, "      , --help      print help and exit\n");
+	fprintf(stderr, "    -a, --append    append to files\n");
 }
 
 /* options */

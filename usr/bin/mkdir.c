@@ -42,8 +42,8 @@ static int make_dir(const char *name, mode_t mode, int parent)
 static void usage(const char *name)
 {
 	fprintf(stderr, "Usage: %s [-p] directory [...]\n", name);
-	fprintf(stderr, "\t  , --help\t\tprint help and exit\n");
-	fprintf(stderr, "\t-p, --parents\t\tno error if existing, make parent directories as needed\n");
+	fprintf(stderr, "      , --help       print help and exit\n");
+	fprintf(stderr, "    -p, --parents    no error if existing, make parent directories as needed\n");
 }
 
 /* options */

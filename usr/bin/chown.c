@@ -81,7 +81,7 @@ static void __gid_from_name(const char *name, gid_t *gid)
 static void usage(const char *name)
 {
 	fprintf(stderr, "Usage: %s { user_name | user_id } file [...]\n", name);
-	fprintf(stderr, "\t  , --help\t\tprint help and exit\n");
+	fprintf(stderr, "      , --help        print help and exit\n");
 }
 
 /* options */

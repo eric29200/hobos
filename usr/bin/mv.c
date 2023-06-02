@@ -34,9 +34,9 @@ static int mv(const char *src, const char *dst, int flags)
 static void usage(const char *name)
 {
 	fprintf(stderr, "Usage: %s [-fv] source [...] target\n", name);
-	fprintf(stderr, "\t  , --help\t\tprint help and exit\n");
-	fprintf(stderr, "\t-f, --force\t\tdo not ask confirmation\n");
-	fprintf(stderr, "\t-v, --verbose\t\texplain what is being done\n");
+	fprintf(stderr, "      , --help       print help and exit\n");
+	fprintf(stderr, "    -f, --force      do not ask confirmation\n");
+	fprintf(stderr, "    -v, --verbose    explain what is being done\n");
 }
 
 /* options */

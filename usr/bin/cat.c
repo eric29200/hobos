@@ -28,7 +28,7 @@ static int print_fd(int fd)
 static void usage(const char *name)
 {
 	fprintf(stderr, "Usage: %s [file ...]\n", name);
-	fprintf(stderr, "\t  , --help\t\tprint help and exit\n");
+	fprintf(stderr, "      , --help        print help and exit\n");
 }
 
 /* options */

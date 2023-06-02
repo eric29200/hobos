@@ -17,13 +17,13 @@
 static void usage(const char *name)
 {
 	fprintf(stderr, "Usage: %s [-snrvma]\n", name);
-	fprintf(stderr, "\t  , --help\t\t\tprint help and exit\n");
-	fprintf(stderr, "\t-s, --kernel-name\t\tprint the kernel name\n");
-	fprintf(stderr, "\t-n, --nodename\t\t\tprint the network node hostname\n");
-	fprintf(stderr, "\t-r, --kernel-release\t\tprint the kernel release\n");
-	fprintf(stderr, "\t-v, --kernel-version\t\tprint the kernel version\n");
-	fprintf(stderr, "\t-m, --machine\t\t\tprint the machine hardware name\n");
-	fprintf(stderr, "\t-a, --all\t\t\tprint all information\n");
+	fprintf(stderr, "      , --help              print help and exit\n");
+	fprintf(stderr, "    -s, --kernel-name       print the kernel name\n");
+	fprintf(stderr, "    -n, --nodename          print the network node hostname\n");
+	fprintf(stderr, "    -r, --kernel-release    print the kernel release\n");
+	fprintf(stderr, "    -v, --kernel-version    print the kernel version\n");
+	fprintf(stderr, "    -m, --machine           print the machine hardware name\n");
+	fprintf(stderr, "    -a, --all               print all information\n");
 }
  
 /* options */

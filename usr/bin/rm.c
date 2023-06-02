@@ -154,10 +154,10 @@ static int rm(const char *name, int flags, int level)
 static void usage(const char *name)
 {
 	fprintf(stderr, "Usage: %s [-rfi] file [...]\n", name);
-	fprintf(stderr, "\t  , --help\t\tprint help and exit\n");
-	fprintf(stderr, "\t-r, --recursive\t\tremove directories and their contents recursively\n");
-	fprintf(stderr, "\t-f, --force\t\tignore nonexistent files and arguments, never prompt\n");
-	fprintf(stderr, "\t-i, \t\t\tprompt before every removal\n");
+	fprintf(stderr, "      , --help         print help and exit\n");
+	fprintf(stderr, "    -r, --recursive    remove directories and their contents recursively\n");
+	fprintf(stderr, "    -f, --force        ignore nonexistent files and arguments, never prompt\n");
+	fprintf(stderr, "    -i,                prompt before every removal\n");
 }
 
 /* options */
