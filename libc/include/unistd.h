@@ -45,6 +45,8 @@ extern char **environ;
 #define SYS_dup2		63
 #define SYS_symlink		83
 #define SYS_readlink		85
+#define SYS_mmap		90
+#define SYS_munmap		91
 #define SYS_wait4		114
 #define SYS_uname		122
 #define SYS_select		142

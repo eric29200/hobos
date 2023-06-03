@@ -59,7 +59,8 @@ static inline long __syscall5(long nr, long a1, long a2, long a3, long a4, long 
 static inline long __syscall6(long nr, long a1, long a2, long a3, long a4, long a5, long a6)
 {
 	long ret;
-	__asm__ __volatile__("int $0x80" : "=a"(ret) : "0"(nr), "b"(a1), "c"(a2), "d"(a3), "S"(a4), "D"(a5), "g"(a6));
+	__asm__ __volatile__ ("pushl %7 ; push %%ebp ; mov 4(%%esp),%%ebp ; int $0x80 ; pop %%ebp ; add $4,%%esp"
+		: "=a"(ret) : "a"(nr), "b"(a1), "c"(a2), "d"(a3), "S"(a4), "D"(a5), "g"(a6) : "memory");
 	return ret;
 }
 
