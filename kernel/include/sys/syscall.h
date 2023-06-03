@@ -86,7 +86,6 @@
 #define __NR_pread64			180
 #define __NR_getcwd			183
 #define __NR_vfork			190
-#define __NR_mmap2			192
 #define __NR_truncate64			193
 #define __NR_ftruncate64		194
 #define __NR_stat64			195
@@ -175,7 +174,6 @@ int sys_ioctl(int fd, unsigned long request, unsigned long arg);
 int sys_fcntl(int fd, int cmd, unsigned long arg);
 mode_t sys_umask(mode_t mask);
 void *sys_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
-void *sys_mmap2(void *addr, size_t length, int prot, int flags, int fd, off_t pgoffset);
 int sys_munmap(void *addr, size_t length);
 int sys_mkdirat(int dirfd, const char *pathname, mode_t mode);
 int sys_linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags);
