@@ -11,7 +11,7 @@
 #include <uio.h>
 #include <stddef.h>
 
-#define SYSCALLS_NUM			(__NR_faccessat2 + 1)
+#define SYSCALLS_NUM			(__NR_clock_gettime64 + 1)
 
 #define __NR_exit			1
 #define __NR_fork			2
@@ -102,7 +102,6 @@
 #define __NR_setgid32			214
 #define __NR_getdents64			220
 #define __NR_fcntl64			221
-#define __NR_exit_group			252
 #define __NR_statfs64			268
 #define __NR_fstatfs64			269
 #define __NR_openat			295
@@ -124,7 +123,6 @@
 #define __NR_getrandom			355
 #define __NR_statx			383
 #define __NR_clock_gettime64		403
-#define __NR_faccessat2			439
 
 typedef int32_t (*syscall_f)(uint32_t nr, ...);
 
@@ -146,7 +144,6 @@ pid_t sys_waitpid(pid_t pid, int *wstatus, int options);
 pid_t sys_wait4(pid_t pid, int *wstatus, int options, struct rusage_t *rusage);
 int sys_access(const char *filename, mode_t mode);
 int sys_faccessat(int dirfd, const char *pathname, int flags);
-int sys_faccessat2(int dirfd, const char *pathname, int flags);
 int sys_chdir(const char *path);
 int sys_mkdir(const char *pathname, mode_t mode);
 off_t sys_lseek(int fd, off_t offset, int whence);
@@ -180,7 +177,6 @@ mode_t sys_umask(mode_t mask);
 void *sys_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
 void *sys_mmap2(void *addr, size_t length, int prot, int flags, int fd, off_t pgoffset);
 int sys_munmap(void *addr, size_t length);
-void sys_exit_group(int status);
 int sys_mkdirat(int dirfd, const char *pathname, mode_t mode);
 int sys_linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags);
 int sys_unlinkat(int dirfd, const char *pathname, int flags);
