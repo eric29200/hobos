@@ -8,6 +8,8 @@
 
 #include "../libutils/libutils.h"
 
+#define FLAG_HUMAN_READABLE		(1 << 0)
+
 /*
  * Mount entry.
  */
@@ -22,6 +24,9 @@ static char *cols_header[6] = { "Filesystem", "Size", "Used", "Avail", "Use%", "
 
 /* columns width */
 static size_t cols_width[5] = { 0 };
+
+/* size units */
+static size_t size_units = 1024;
 
 /*
  * Create a new mount entry.
@@ -149,27 +154,49 @@ static void print_columns(char **cols)
 /*
  * Show a mount entry.
  */
-static void show_entry(struct mount_entry *entry, bool measuring)
+static void show_entry(struct mount_entry *entry, int flags, bool measuring)
 {
 	fsblkcnt_t blocks, used, avail, prct_used = 0;
 	char *cols[6], buf[BUFSIZ];
 
 	/* get values */
-	blocks = entry->sf.f_blocks;
-	used = entry->sf.f_blocks - entry->sf.f_bfree;
-	avail = entry->sf.f_bavail;
+	blocks = entry->sf.f_blocks / size_units;
+	used = (entry->sf.f_blocks - entry->sf.f_bfree) / size_units;
+	avail = entry->sf.f_bavail / size_units;
 	
 	/* compute used % */
 	if (used + avail)
 		prct_used = used * 100 / (used + avail);
 
-	/* print values in columns */
+	/* print filesystem */
 	cols[0] = entry->fs_name;
+
+	/* print blocks */
 	cols[1] = buf;
-	cols[2] = cols[1] + sprintf(cols[1], "%llu", blocks) + 1;
-	cols[3] = cols[2] + sprintf(cols[2], "%llu", used) + 1;
-	cols[4] = cols[3] + sprintf(cols[3], "%llu", avail) + 1;
+	if (flags & FLAG_HUMAN_READABLE)
+		cols[1] = human_size(blocks, cols[1], buf + BUFSIZ - cols[1]);
+	else
+		sprintf(cols[1], "%lld", blocks);
+
+	/* print used blocks */
+	cols[2] = cols[1] + strlen(cols[1]) + 1;
+	if (flags & FLAG_HUMAN_READABLE)
+		human_size(used, cols[2], buf + BUFSIZ - cols[2]);
+	else
+		sprintf(cols[2], "%lld", used);
+
+	/* print available blocks */
+	cols[3] = cols[2] + strlen(cols[2]) + 1;
+	if (flags & FLAG_HUMAN_READABLE)
+		human_size(avail, cols[3], buf + BUFSIZ - cols[3]);
+	else
+		sprintf(cols[3], "%lld", avail);
+
+	/* print % used */
+	cols[4] = cols[3] + strlen(cols[3]) + 1;
 	sprintf(cols[4], "%llu%", prct_used);
+
+	/* print mount point */
 	cols[5] = entry->dir_name;
 
 	/* measure or print columns */
@@ -182,7 +209,7 @@ static void show_entry(struct mount_entry *entry, bool measuring)
 /*
  * Get filesystems informations.
  */
-static int df()
+static int df(int flags)
 {
 	struct mount_entry *entries, *entry;
 	int i;
@@ -196,14 +223,14 @@ static int df()
 
 	/* measure entries */
 	for (entry = entries; entry != NULL; entry = entry->next)
-		show_entry(entry, true);
+		show_entry(entry, flags, true);
 
 	/* print header */
 	print_columns(cols_header);
 	
 	/* print entries */
 	for (entry = entries; entry != NULL; entry = entry->next)
-		show_entry(entry, false);
+		show_entry(entry, flags, false);
 
 	return 0;
 }
@@ -214,26 +241,32 @@ static int df()
 static void usage(const char *name)
 {
 	fprintf(stderr, "Usage: %s\n", name);
-	fprintf(stderr, "    , --help        print help and exit\n");
+	fprintf(stderr, "    , --help              print help and exit\n");
+	fprintf(stderr, "  -h, --human-readable    print sizes in human readable format\n");
 }
  
 /* options */
 struct option long_opts[] = {
-	{ "help",	no_argument,	0,	OPT_HELP	},
-	{ 0,		0,		0,	0		},
+	{ "help",		no_argument,	0,	OPT_HELP	},
+	{ "human-readable",	no_argument,	0,	'h'		},
+	{ 0,			0,		0,	0		},
 };
 
 int main(int argc, char **argv)
 {
 	const char *name = argv[0];
-	int c;
+	int c, flags = 0;
 
 	/* get options */
-	while ((c = getopt_long(argc, argv, "", long_opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "h", long_opts, NULL)) != -1) {
 		switch (c) {
 			case OPT_HELP:
 				usage(name);
 				exit(0);
+				break;
+			case 'h':
+				size_units = 1;
+				flags |= FLAG_HUMAN_READABLE;
 				break;
 			default:
 				exit(1);
@@ -245,5 +278,5 @@ int main(int argc, char **argv)
 	argc -= optind;
 	argv += optind;
 
-	return df();
+	return df(flags);
 }
