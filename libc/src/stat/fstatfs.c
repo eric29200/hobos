@@ -5,5 +5,5 @@
 
 int fstatfs(int fd, struct statfs *buf)
 {
-	return syscall2(SYS_fstatfs64, fd, (long) buf);
+	return syscall3(SYS_fstatfs64, fd, sizeof(*buf), (long) buf);
 }

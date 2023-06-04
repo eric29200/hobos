@@ -34,6 +34,7 @@ struct mntent *getmntent(FILE *stream)
 		mnt.mnt_dir = strtok(NULL, " ");
 		mnt.mnt_type = strtok(NULL, " ");
 		mnt.mnt_ops = strtok(NULL, " ");
+		break;
 	}
 
 	return &mnt;

@@ -22,4 +22,7 @@ struct statfs {
 	unsigned long		f_spare[4];
 };
 
+int statfs(const char *path, struct statfs *buf);
+int fstatfs(int fd, struct statfs *buf);
+
 #endif
