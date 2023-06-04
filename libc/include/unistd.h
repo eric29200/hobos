@@ -57,6 +57,8 @@ extern char **environ;
 #define SYS_rt_sigprocmask	175
 #define SYS_getcwd		183
 #define SYS_getdents64		220
+#define SYS_statfs64		268
+#define SYS_fstatfs64		269
 #define SYS_fchownat		298
 #define SYS_fstatat64		300
 #define SYS_pselect6		308

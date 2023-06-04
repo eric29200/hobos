@@ -14,5 +14,6 @@ typedef int			clockid_t;
 typedef long			clock_t;
 typedef unsigned long long	dev_t;
 typedef unsigned		nlink_t;
+typedef long long		fsblkcnt_t;
 
 #endif
