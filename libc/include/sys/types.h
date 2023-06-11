@@ -15,5 +15,7 @@ typedef long			clock_t;
 typedef unsigned long long	dev_t;
 typedef unsigned		nlink_t;
 typedef long long		fsblkcnt_t;
+typedef unsigned		socklen_t;
+typedef unsigned short		sa_family_t;
 
 #endif

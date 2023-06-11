@@ -6,6 +6,7 @@
 #include <sys/utsname.h>
 #include <sys/sysinfo.h>
 #include <proc/sched.h>
+#include <net/socket.h>
 #include <time.h>
 #include <resource.h>
 #include <uio.h>
@@ -120,6 +121,13 @@
 #define __NR_prlimit64			340
 #define __NR_renameat2			353
 #define __NR_getrandom			355
+#define __NR_socket			359
+#define __NR_bind			361
+#define __NR_connect			362
+#define __NR_listen			363
+#define __NR_accept			364
+#define __NR_sendto			369
+#define __NR_recvfrom			371
 #define __NR_statx			383
 #define __NR_clock_gettime64		403
 
@@ -228,5 +236,12 @@ int sys_pause();
 int sys_prlimit64(pid_t pid, int resource, struct rlimit64_t *new_limit, struct rlimit64_t *old_limit);
 void *sys_mremap(void *old_address, size_t old_size, size_t new_size, int flags, void *new_address);
 int sys_ipc(uint32_t call, int first, int second, int third, void *ptr, int fifth);
+int sys_socket(int family, int type, int protocol);
+int sys_bind(int sockfd, const struct sockaddr *addr, size_t addrlen);
+int sys_connect(int sockfd, const struct sockaddr *addr, size_t addrlen);
+int sys_sendto(int sockfd, const void *buf, size_t len, int flags, const struct sockaddr *dest_addr, size_t addrlen);
+int sys_recvfrom(int sockfd, const void *buf, size_t len, int flags, struct sockaddr *src_addr, size_t *addrlen);
+int sys_listen(int sockfd, int backlog);
+int sys_accept(int sockfd, struct sockaddr *addr, size_t *addrlen);
 
 #endif

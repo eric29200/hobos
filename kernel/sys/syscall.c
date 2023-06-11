@@ -1,6 +1,7 @@
 #include <sys/syscall.h>
 #include <x86/interrupt.h>
 #include <proc/sched.h>
+#include <net/socket.h>
 #include <string.h>
 #include <stdio.h>
 
@@ -115,6 +116,13 @@ static const void *syscalls[] = {
 	[__NR_pause]			= sys_pause,
 	[__NR_prlimit64]		= sys_prlimit64,
 	[__NR_ipc]			= sys_ipc,
+	[__NR_socket]			= sys_socket,
+	[__NR_bind]			= sys_bind,
+	[__NR_connect]			= sys_connect,
+	[__NR_listen]			= sys_listen,
+	[__NR_accept]			= sys_accept,
+	[__NR_recvfrom]			= sys_recvfrom,
+	[__NR_sendto]			= sys_sendto,
 };
 
 /*

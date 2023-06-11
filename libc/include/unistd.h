@@ -63,6 +63,13 @@ extern char **environ;
 #define SYS_fstatat64		300
 #define SYS_pselect6		308
 #define SYS_utimensat		320
+#define SYS_socket		359
+#define SYS_bind		361
+#define SYS_connect		362
+#define SYS_listen		363
+#define SYS_accept		364
+#define SYS_sendto		369
+#define SYS_recvfrom		371
 #define SYS_clock_gettime64	403
 
 void _exit(int status);

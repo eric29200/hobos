@@ -37,9 +37,20 @@
 #define ERANGE		34	/* Math result not representable */
 #define ENOSYS		35	/* Not implemented */
 #define ENAMETOOLONG	36	/* File name too long */
+#define	ENOSR		63	/* Out of streams resources */
+#define	ENOTSOCK	88	/* Socket operation on non-socket */
+#define	EMSGSIZE	90	/* Message too long */
+#define	EPROTOTYPE	91	/* Protocol wrong type for socket */
+#define	EPROTONOSUPPORT	93	/* Protocol not supported */
+#define	ESOCKTNOSUPPORT	94	/* Socket type not supported */
+#define	EOPNOTSUPP	95	/* Operation not supported on transport endpoint */
 #define	EADDRINUSE	98	/* Address already in use */
+#define	ECONNRESET	104	/* Connection reset by peer */
+#define	EISCONN		106	/* Transport endpoint is already connected */
 #define ENOTCONN	107	/* Transport endpoint is not connected */
 #define ECONNREFUSED	111	/* Connection refused */
+#define	EINPROGRESS	115	/* Operation now in progress */
+#define	EALREADY	114	/* Operation already in progress */
 #define ERESTARTSYS	512	/* Restart system call */
 #define ERESTARTNOHAND	514	/* restart if no handler */
 #define ENOIOCTLCMD	515	/* no ioctl command */
