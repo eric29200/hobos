@@ -12,20 +12,24 @@ static struct file_operations_t socket_fops;
 /*
  * Lookup for a socket.
  */
-static struct socket_t *sockfd_lookup(int sockfd, struct file_t **filpp)
+static struct socket_t *sockfd_lookup(int sockfd, struct file_t **filpp, int *err)
 {
 	struct inode_t *inode;
 	struct file_t *filp;
 
 	/* check file descriptor */
-	if (sockfd < 0 || sockfd >= NR_OPEN || !current_task->files->filp[sockfd])
+	if (sockfd < 0 || sockfd >= NR_OPEN || !current_task->files->filp[sockfd]) {
+		*err = -EBADF;
 		return NULL;
+	}
 
 	/* get inode */
 	filp = current_task->files->filp[sockfd];
 	inode = filp->f_inode;
-	if (!inode || !inode->i_sock)
+	if (!inode || !inode->i_sock) {
+		*err = -ENOTSOCK;
 		return NULL;
+	}
 
 	/* set output file */
 	if (filpp)
@@ -284,15 +288,12 @@ int do_socket(int domain, int type, int protocol)
 int do_bind(int sockfd, const struct sockaddr *addr, size_t addrlen)
 {
 	struct socket_t *sock;
-
-	/* check file descriptor */
-	if (sockfd < 0 || sockfd >= NR_OPEN || !current_task->files->filp[sockfd])
-		return -EBADF;
+	int err;
 
 	/* get socket */
-	sock = sockfd_lookup(sockfd, NULL);
+	sock = sockfd_lookup(sockfd, NULL, &err);
 	if (!sock)
-		return -ENOTSOCK;
+		return err;
 
 	return sock->ops->bind(sock, addr, addrlen);
 }
@@ -304,15 +305,12 @@ int do_connect(int sockfd, const struct sockaddr *addr, size_t addrlen)
 {
 	struct socket_t *sock;
 	struct file_t *filp;
-
-	/* check file descriptor */
-	if (sockfd < 0 || sockfd >= NR_OPEN || !current_task->files->filp[sockfd])
-		return -EBADF;
+	int err;
 
 	/* get socket */
-	sock = sockfd_lookup(sockfd, &filp);
+	sock = sockfd_lookup(sockfd, &filp, &err);
 	if (!sock)
-		return -ENOTSOCK;
+		return err;
 
 	/* check state */
 	switch (sock->state) {
@@ -336,16 +334,12 @@ int do_connect(int sockfd, const struct sockaddr *addr, size_t addrlen)
 int do_listen(int sockfd, int backlog)
 {
 	struct socket_t *sock;
-	int ret;
-
-	/* check file descriptor */
-	if (sockfd < 0 || sockfd >= NR_OPEN || !current_task->files->filp[sockfd])
-		return -EBADF;
+	int err;
 
 	/* get socket */
-	sock = sockfd_lookup(sockfd, NULL);
+	sock = sockfd_lookup(sockfd, NULL, &err);
 	if (!sock)
-		return -ENOTSOCK;
+		return err;
 
 	/* check socket state */
 	if (sock->state != SS_UNCONNECTED)
@@ -356,11 +350,11 @@ int do_listen(int sockfd, int backlog)
 		return -EOPNOTSUPP;
 
 	/* protocol listen */
-	ret = sock->ops->listen(sock, backlog);
-	if (ret == 0)
+	err = sock->ops->listen(sock, backlog);
+	if (err == 0)
 		sock->flags |= SO_ACCEPTCON;
 
-	return ret;
+	return err;
 }
 
 /*
@@ -370,16 +364,12 @@ int do_accept(int sockfd, struct sockaddr *addr, size_t *addrlen)
 {
 	struct socket_t *sock, *new_sock;
 	struct file_t *filp;
-	int ret, fd;
-
-	/* check file descriptor */
-	if (sockfd < 0 || sockfd >= NR_OPEN || !current_task->files->filp[sockfd])
-		return -EBADF;
+	int err, fd;
 
 	/* get socket */
-	sock = sockfd_lookup(sockfd, &filp);
+	sock = sockfd_lookup(sockfd, &filp, &err);
 	if (!sock)
-		return -ENOTSOCK;
+		return err;
 	
 	/* check socket state */
 	if (sock->state != SS_UNCONNECTED)
@@ -397,25 +387,19 @@ int do_accept(int sockfd, struct sockaddr *addr, size_t *addrlen)
 	new_sock->ops = sock->ops;
 
 	/* duplicate socket */
-	ret = sock->ops->dup(new_sock, sock);
-	if (ret < 0) {
-		sock_release(new_sock);
-		return ret;
-	}
+	err = sock->ops->dup(new_sock, sock);
+	if (err < 0)
+		goto err_release;
 
 	/* protocol accept */
-	ret = new_sock->ops->accept(sock, new_sock, filp->f_flags);
-	if (ret < 0) {
-		sock_release(new_sock);
-		return ret;
-	}
+	err = new_sock->ops->accept(sock, new_sock, filp->f_flags);
+	if (err < 0)
+		goto err_release;
 
 	/* get file descriptor */
-	fd = get_fd(new_sock->inode);
-	if (fd < 0) {
-		sock_release(new_sock);
-		return -EINVAL;
-	}
+	fd = err = get_fd(new_sock->inode);
+	if (err < 0)
+		goto err_release;
 
 	/* set socket file */
 	sock->filp = current_task->files->filp[fd];
@@ -425,6 +409,9 @@ int do_accept(int sockfd, struct sockaddr *addr, size_t *addrlen)
 		new_sock->ops->getname(new_sock, addr, addrlen, 1);
 
 	return fd;
+err_release:
+	sock_release(new_sock);
+	return err;
 }
 
 /*
@@ -436,15 +423,12 @@ int do_sendto(int sockfd, const void *buf, size_t len, int flags, const struct s
 	struct msghdr_t msg;
 	struct file_t *filp;
 	struct iovec_t iov;
-
-	/* check file descriptor */
-	if (sockfd < 0 || sockfd >= NR_OPEN || !current_task->files->filp[sockfd])
-		return -EBADF;
+	int err;
 
 	/* get socket */
-	sock = sockfd_lookup(sockfd, &filp);
+	sock = sockfd_lookup(sockfd, &filp, &err);
 	if (!sock)
-		return -ENOTSOCK;
+		return err;
 
 	/* create message */
 	iov.iov_base = (void *) buf;
@@ -466,15 +450,12 @@ int do_recvfrom(int sockfd, const void *buf, size_t len, int flags, struct socka
 	struct msghdr_t msg;
 	struct file_t *filp;
 	struct iovec_t iov;
-
-	/* check file descriptor */
-	if (sockfd < 0 || sockfd >= NR_OPEN || !current_task->files->filp[sockfd])
-		return -EBADF;
+	int err;
 
 	/* get socket */
-	sock = sockfd_lookup(sockfd, &filp);
+	sock = sockfd_lookup(sockfd, &filp, &err);
 	if (!sock)
-		return -ENOTSOCK;
+		return err;
 
 	/* create message */
 	iov.iov_base = (void *) buf;
