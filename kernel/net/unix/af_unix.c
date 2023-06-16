@@ -179,56 +179,6 @@ static void unix_write_space_cb(struct sock_t *sk)
 }
 
 /*
- * Create a UNIX socket.
- */
-static int unix_create(struct socket_t *sock, int protocol)
-{
-	unix_socket_t *sk;
-
-	/* check protocol */
-	if(protocol && protocol != PF_UNIX)
-		return -EPROTONOSUPPORT;
-
-	/* allocate UNIX socket */
-	sk = (unix_socket_t *) sk_alloc();
-	if (!sk)
-		return -ENOMEM;
-
-	/* check socket type */
-	switch(sock->type) {
-		case SOCK_STREAM:
-		case SOCK_DGRAM:
-			break;
-		case SOCK_RAW:
-			sock->type = SOCK_DGRAM;
-			break;
-		default:
-			sk_free(sk);
-			return -ESOCKTNOSUPPORT;
-	}
-
-	/* set socket */
-	sk->type = sock->type;
-	skb_queue_head_init(&sk->write_queue);
-	skb_queue_head_init(&sk->receive_queue);
-	sk->protinfo.af_unix.family = AF_UNIX;
-	sk->protinfo.af_unix.inode = NULL;
-	sk->protinfo.af_unix.locks = 1;
-	sk->rcvbuf = SK_RMEM_MAX;
-	sk->sndbuf = SK_WMEM_MAX;
-	sk->state = TCP_CLOSE;
-	sk->state_change = unix_state_change_cb;
-	sk->data_ready = unix_data_ready_cb;
-	sk->write_space = unix_write_space_cb;
-	sk->socket = sock;
-	sock->data = (void *) sk;
-	sk->sleep = &sock->wait;
-	unix_insert_socket(sk);
-
-	return 0;
-}
-
-/*
  * Duplicate a socket.
  */
 static int unix_dup(struct socket_t *new_sock, struct socket_t *old_sock)
@@ -292,7 +242,7 @@ static int unix_getname(struct socket_t *sock, struct sockaddr *addr, size_t *ad
 	sunaddr->sun_family = AF_UNIX;
 
 	/* not bound */
-	if(!sk->protinfo.af_unix.name) {
+	if (!sk->protinfo.af_unix.name) {
 		*sunaddr->sun_path = 0;
 		*addrlen = sizeof(sunaddr->sun_family) + 1;
 		return 0;
@@ -412,7 +362,7 @@ static int unix_connect(struct socket_t *sock, const struct sockaddr *addr, size
 	}
 
 	/* unconnected socket : send a SYN message */
-	if(sock->state == SS_UNCONNECTED) {
+	if (sock->state == SS_UNCONNECTED) {
 		/* allocate a socket buffer */
 		skb = sock_alloc_send_skb(sk, 0, 0, &err);
 		if (!skb)
@@ -431,7 +381,7 @@ static int unix_connect(struct socket_t *sock, const struct sockaddr *addr, size
 		}
 
 		/* wrong end point */
-		if(other->type != sk->type) {
+		if (other->type != sk->type) {
 			skb_free(skb, FREE_WRITE);
 			return -EPROTOTYPE;
 		}
@@ -451,8 +401,8 @@ static int unix_connect(struct socket_t *sock, const struct sockaddr *addr, size
 	}
 			
 	/* wait for an accept */
-	while(sk->state == TCP_SYN_SENT) {
-		if(flags & O_NONBLOCK)
+	while (sk->state == TCP_SYN_SENT) {
+		if (flags & O_NONBLOCK)
 			return -EINPROGRESS;
 
 		task_sleep(sk->sleep);
@@ -462,7 +412,7 @@ static int unix_connect(struct socket_t *sock, const struct sockaddr *addr, size
 	}
 	
 	/* check connection */
-	if(sk->state == TCP_CLOSE) {
+	if (sk->state == TCP_CLOSE) {
 		sk->protinfo.af_unix.other->protinfo.af_unix.locks--;
 		sk->protinfo.af_unix.other = NULL;
 		sock->state = SS_UNCONNECTED;
@@ -754,9 +704,8 @@ static int unix_recvmsg(struct socket_t *sock, struct msghdr_t *msg, size_t len,
 /*
  * Unix protocol operations.
  */
-struct proto_ops_t unix_ops = {
+static struct proto_ops_t unix_ops = {
 	.family			= AF_UNIX,
-	.create			= unix_create,
 	.dup			= unix_dup,
 	.release		= unix_release,
 	.getname		= unix_getname,
@@ -767,3 +716,56 @@ struct proto_ops_t unix_ops = {
 	.sendmsg		= unix_sendmsg,
 	.recvmsg		= unix_recvmsg,
 };
+
+/*
+ * Create a UNIX socket.
+ */
+int unix_create(struct socket_t *sock, int protocol)
+{
+	unix_socket_t *sk;
+
+	/* check protocol */
+	if (protocol && protocol != PF_UNIX)
+		return -EPROTONOSUPPORT;
+
+	/* check socket type */
+	switch(sock->type) {
+		case SOCK_STREAM:
+			sock->ops = &unix_ops;
+			break;
+		case SOCK_DGRAM:
+			sock->ops = &unix_ops;
+			break;
+		case SOCK_RAW:
+			sock->type = SOCK_DGRAM;
+			sock->ops = &unix_ops;
+			break;
+		default:
+			return -ESOCKTNOSUPPORT;
+	}
+
+	/* allocate UNIX socket */
+	sk = (unix_socket_t *) sk_alloc();
+	if (!sk)
+		return -ENOMEM;
+
+	/* set socket */
+	sk->type = sock->type;
+	skb_queue_head_init(&sk->write_queue);
+	skb_queue_head_init(&sk->receive_queue);
+	sk->protinfo.af_unix.family = AF_UNIX;
+	sk->protinfo.af_unix.inode = NULL;
+	sk->protinfo.af_unix.locks = 1;
+	sk->rcvbuf = SK_RMEM_MAX;
+	sk->sndbuf = SK_WMEM_MAX;
+	sk->state = TCP_CLOSE;
+	sk->state_change = unix_state_change_cb;
+	sk->data_ready = unix_data_ready_cb;
+	sk->write_space = unix_write_space_cb;
+	sk->socket = sock;
+	sock->data = (void *) sk;
+	sk->sleep = &sock->wait;
+	unix_insert_socket(sk);
+
+	return 0;
+}

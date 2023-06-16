@@ -105,7 +105,6 @@ struct msghdr_t {
  */
 struct proto_ops_t {
 	int			family;
-	int (*create)(struct socket_t *, int);
 	int (*dup)(struct socket_t *, struct socket_t *);
 	int (*release)(struct socket_t *, struct socket_t *);
 	int (*getname)(struct socket_t *, struct sockaddr *, size_t *, int);
@@ -117,8 +116,8 @@ struct proto_ops_t {
 	int (*recvmsg)(struct socket_t *, struct msghdr_t *, size_t, int, int, size_t *);
 };
 
-/* protocol operations */
-extern struct proto_ops_t unix_ops;
+/* protocol creation */
+int unix_create(struct socket_t *sock, int protocol);
 
 /* iovec operations */
 void memcpy_toiovec(struct iovec_t *iov, void *buf, size_t len);

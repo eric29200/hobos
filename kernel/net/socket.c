@@ -233,18 +233,8 @@ static int sock_lseek(struct file_t *filp, off_t offset, int whence)
  */
 int do_socket(int domain, int type, int protocol)
 {
-	struct proto_ops_t *ops;
 	struct socket_t *sock;
-	int ret, sockfd;
-
-	/* choose protocol */
-	switch (domain) {
-		case AF_UNIX:
-			ops = &unix_ops;
-			break;
-		default:
-			return -EINVAL;
-	}
+	int err, sockfd;
 
 	/* check type */
 	if (type != SOCK_STREAM && type != SOCK_DGRAM && type != SOCK_RAW)
@@ -259,27 +249,35 @@ int do_socket(int domain, int type, int protocol)
 
 	/* set socket */
 	sock->type = type;
-	sock->ops = ops;
 
 	/* create socket */
-	ret = sock->ops->create(sock, protocol);
-	if (ret) {
-		sock_release(sock);
-		return ret;
+	switch (domain) {
+		case AF_UNIX:
+			err = unix_create(sock, protocol);
+			break;
+		default:
+			err = -EINVAL;
+			break;
 	}
+
+	/* handle error */
+	if (err)
+		goto err_release;
 
 	/* get socket file descriptor */
 	sockfd = get_fd(sock->inode);
 	if (sockfd < 0) {
-		sock_release(sock);
-		return -EINVAL;
+		err = -EINVAL;
+		goto err_release;
 	}
 
 	/* set file pointer */
 	sock->filp = current_task->files->filp[sockfd];
 
 	return sockfd;
-
+err_release:
+	sock_release(sock);
+	return err;
 }
 
 /*
