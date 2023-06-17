@@ -192,7 +192,7 @@ static int unix_dup(struct socket_t *new_sock, struct socket_t *old_sock)
  */
 static int unix_release(struct socket_t *sock, struct socket_t *peer)
 {
-	unix_socket_t *sk_pair, *sk = sock->data;
+	unix_socket_t *sk_pair, *sk = sock->sk;
 
 	/* unused peer */
 	UNUSED(peer);
@@ -229,7 +229,7 @@ static int unix_release(struct socket_t *sock, struct socket_t *peer)
 static int unix_getname(struct socket_t *sock, struct sockaddr *addr, size_t *addrlen, int peer)
 {
 	struct sockaddr_un *sunaddr = (struct sockaddr_un *) addr;
-	unix_socket_t *sk = sock->data;
+	unix_socket_t *sk = sock->sk;
 
 	/* get peer name */	
 	if (peer) {
@@ -259,7 +259,7 @@ static int unix_getname(struct socket_t *sock, struct sockaddr *addr, size_t *ad
 static int unix_bind(struct socket_t *sock, const struct sockaddr *addr, size_t addrlen)
 {
 	struct sockaddr_un *sunaddr = (struct sockaddr_un *) addr;
-	unix_socket_t *sk = sock->data;
+	unix_socket_t *sk = sock->sk;
 	int ret;
 
 	/* already bound */
@@ -306,7 +306,7 @@ static int unix_bind(struct socket_t *sock, const struct sockaddr *addr, size_t 
 static int unix_connect(struct socket_t *sock, const struct sockaddr *addr, size_t addrlen, int flags)
 {
 	struct sockaddr_un *sunaddr = (struct sockaddr_un *) addr;
-	unix_socket_t *other, *sk = sock->data;
+	unix_socket_t *other, *sk = sock->sk;
 	struct sk_buff_t *skb;
 	int err;
 
@@ -429,7 +429,7 @@ static int unix_connect(struct socket_t *sock, const struct sockaddr *addr, size
  */
 static int unix_listen(struct socket_t *sock, int backlog)
 {
-	unix_socket_t *sk = sock->data;
+	unix_socket_t *sk = sock->sk;
 
 	/* check socket type */
 	if (sk->type != SOCK_STREAM)
@@ -449,7 +449,7 @@ static int unix_listen(struct socket_t *sock, int backlog)
  */
 static int unix_accept(struct socket_t *sock, struct socket_t *new_sock, int flags)
 {
-	unix_socket_t *tsk, *sk = sock->data, *new_sk = new_sock->data;
+	unix_socket_t *tsk, *sk = sock->sk, *new_sk = new_sock->sk;
 	struct sk_buff_t *skb;
 
 	/* check socket */
@@ -507,7 +507,7 @@ static int unix_accept(struct socket_t *sock, struct socket_t *new_sock, int fla
 static int unix_sendmsg(struct socket_t *sock, struct msghdr_t *msg, size_t len, int nonblock, int flags)
 {
 	struct sockaddr_un *sunaddr = msg->msg_name;
-	unix_socket_t *other, *sk = sock->data;
+	unix_socket_t *other, *sk = sock->sk;
 	struct sk_buff_t *skb;
 	size_t sent, size;
 	int err;
@@ -606,7 +606,7 @@ static int unix_recvmsg(struct socket_t *sock, struct msghdr_t *msg, size_t len,
 	struct sockaddr_un *sunaddr = msg->msg_name;
 	size_t ct, n, done, iov_len, copied = 0;
 	struct iovec_t *iov = msg->msg_iov;
-	unix_socket_t *sk = sock->data;
+	unix_socket_t *sk = sock->sk;
 	struct sk_buff_t *skb;
 	void *buf;
 
@@ -763,7 +763,7 @@ int unix_create(struct socket_t *sock, int protocol)
 	sk->data_ready = unix_data_ready_cb;
 	sk->write_space = unix_write_space_cb;
 	sk->socket = sock;
-	sock->data = (void *) sk;
+	sock->sk = sk;
 	sk->sleep = &sock->wait;
 	unix_insert_socket(sk);
 

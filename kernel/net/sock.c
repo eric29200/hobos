@@ -9,10 +9,12 @@ struct sock_t *sk_alloc()
 {
 	struct sock_t *sk;
 
+	/* allocate a new sock */
 	sk = (struct sock_t *) kmalloc(sizeof(struct sock_t));
 	if (!sk)
 		return NULL;
 
+	/* memzero */
 	memset(sk, 0, sizeof(struct sock_t));
 
 	return sk;

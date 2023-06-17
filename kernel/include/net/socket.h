@@ -83,7 +83,7 @@ struct socket_t {
 	struct wait_queue_t *		wait;			/* wait queue */
 	struct inode_t *		inode;			/* associated inode */
 	struct file_t *			filp;			/* associated file */
-	void *				data;			/* protocol data */
+	struct sock_t *			sk;			/* protocol socket */
 	struct proto_ops_t *		ops;			/* protocol operations */
 	struct socket_t *		conn;			/* server socket connected to */
 	struct socket_t *		iconn;			/* incomplete client connections */
