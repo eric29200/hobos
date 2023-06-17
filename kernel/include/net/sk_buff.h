@@ -2,6 +2,7 @@
 #define _SK_BUFF_H_
 
 #include <stddef.h>
+#include <uio.h>
 
 #define FREE_READ			1
 #define FREE_WRITE			0
@@ -16,15 +17,22 @@ struct sk_buff_t {
 	struct sk_buff_t *		next;			/* next buffer in list */
 	struct sk_buff_t *		prev;			/* previous buffer in list */
 	struct sk_buff_head_t *		list;			/* list we are on */
-	size_t				count;			/* reference count */
+	union {							/* transport layer header */
+		uint8_t *		raw;
+	} h;
+	size_t				users;			/* users count */
+	int				datarefp;		/* reference count */
+	char				is_clone;		/* we are clone */
+	char				cloned;			/* may be cloned */
 	struct sock_t *			sk;		 	/* socket we are owned by */
 	size_t				truesize;		/* buffer size */
-	struct sk_buff_t *		data_skb;		/* link to the actual data skb */
 	uint8_t *			data;			/* data of the buffer */
 	uint8_t *			head;			/* head of the buffer */
 	uint8_t *			tail;			/* tail of the buffer */
 	uint8_t *			end;			/* end of the buffer */
 	size_t				len;			/* socket buffer length */
+
+	void (*destructor)(struct sk_buff_t *);			/* destructor */
 };
 
 /*
@@ -76,6 +84,22 @@ static inline void skb_queue_head_init(struct sk_buff_head_t *list)
 	list->prev = (struct sk_buff_t *) list;
 	list->next = (struct sk_buff_t *) list;
 	list->len = 0;
+}
+
+/*
+ * Is a socket buffer list empty ?
+ */
+static inline int skb_queue_empty(struct sk_buff_head_t *list)
+{
+	return (list->next == (struct sk_buff_t *) list);
+}
+
+/*
+ * Get length of a socket buffer list.
+ */
+static inline size_t skb_queue_len(struct sk_buff_head_t *list)
+{
+	return list->len;
 }
 
 /*
@@ -158,6 +182,8 @@ static inline struct sk_buff_t *skb_peek(struct sk_buff_head_t *list)
 }
 
 struct sk_buff_t *skb_alloc(size_t size);
-void skb_free(struct sk_buff_t *skb, int rw);
+void skb_free(struct sk_buff_t *skb);
+int skb_copy_datagram_iovec(struct sk_buff_t *skb, size_t offset, struct iovec_t *to, size_t size);
+struct sk_buff_t *skb_recv_datagram(struct sock_t *sk, int flags, int nonblock, int *err);
 
 #endif

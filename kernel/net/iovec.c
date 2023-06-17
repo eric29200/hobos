@@ -4,7 +4,7 @@
 /*
  * Copy buffer to iov struct.
  */
-void memcpy_toiovec(struct iovec_t *iov, void *buf, size_t len)
+int memcpy_toiovec(struct iovec_t *iov, void *buf, size_t len)
 {
 	size_t n;
 
@@ -21,12 +21,14 @@ void memcpy_toiovec(struct iovec_t *iov, void *buf, size_t len)
 
 		iov++;
 	}
+
+	return 0;
 }
 
 /*
  * Copy iovec struct to buffer.
  */
-void memcpy_fromiovec(void *buf, struct iovec_t *iov, size_t len)
+int memcpy_fromiovec(void *buf, struct iovec_t *iov, size_t len)
 {
 	size_t n;
 
@@ -43,4 +45,6 @@ void memcpy_fromiovec(void *buf, struct iovec_t *iov, size_t len)
 
 		iov++;
 	}
+
+	return 0;
 }

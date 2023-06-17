@@ -12,7 +12,7 @@ static struct file_operations_t socket_fops;
 /*
  * Lookup for a socket.
  */
-static struct socket_t *sockfd_lookup(int sockfd, struct file_t **filpp, int *err)
+static struct socket_t *sockfd_lookup(int sockfd, int *err)
 {
 	struct inode_t *inode;
 	struct file_t *filp;
@@ -30,10 +30,6 @@ static struct socket_t *sockfd_lookup(int sockfd, struct file_t **filpp, int *er
 		*err = -ENOTSOCK;
 		return NULL;
 	}
-
-	/* set output file */
-	if (filpp)
-		*filpp = filp;
 
 	return &inode->u.socket_i;
 }
@@ -93,7 +89,7 @@ static struct socket_t *sock_alloc()
 		return NULL;
 
 	/* set inode */
-	inode->i_mode = S_IFSOCK;
+	inode->i_mode = S_IFSOCK | S_IRWXUGO;
 	inode->i_sock = 1;
 	inode->i_uid = current_task->uid;
 	inode->i_gid = current_task->gid;
@@ -108,39 +104,17 @@ static struct socket_t *sock_alloc()
 }
 
 /*
- * Release a peer socket.
- */
-static void sock_release_peer(struct socket_t *peer)
-{
-	peer->state = SS_DISCONNECTING;
-	task_wakeup_all(&peer->wait);
-}
-
-/*
  * Release a socket.
  */
 static void sock_release(struct socket_t *sock)
 {
-	struct socket_t *peer, *next;
-	socket_state_t old_state;
-
 	/* mark socket "disconnecting" */
-	old_state = sock->state;
-	if (old_state != SS_UNCONNECTED)
+	if (sock->state != SS_UNCONNECTED)
 		sock->state = SS_DISCONNECTING;
-
-	/* wake up anyone waiting for connections */
-	for (peer = sock->iconn; peer != NULL; peer = next) {
-		next = peer->next;
-		sock_release_peer(peer);
-	}
-
-	/* wake up anyone we're connected to */
-	peer = old_state == SS_CONNECTED ? sock->conn : NULL;
+	
+	/* release */
 	if (sock->ops)
-		sock->ops->release(sock, peer);
-	if (peer)
-		sock_release_peer(peer);
+		sock->ops->release(sock, NULL);
 
 	/* release inode */
 	sock->filp = NULL;
@@ -168,8 +142,6 @@ static int sock_read(struct file_t *filp, char *buf, int len)
 
 	/* get socket */
 	sock = &filp->f_inode->u.socket_i;
-	if (sock->flags & SO_ACCEPTCON)
-		return -EINVAL;
 
 	/* check length */
 	if (len < 0)
@@ -184,7 +156,7 @@ static int sock_read(struct file_t *filp, char *buf, int len)
 	iov.iov_base = buf;
 	iov.iov_len = len;
 
-	return sock->ops->recvmsg(sock, &msg, len, filp->f_flags & O_NONBLOCK, 0, &msg.msg_namelen);
+	return sock->ops->recvmsg(sock, &msg, len, filp->f_flags & O_NONBLOCK ? 0 : MSG_DONTWAIT);
 }
 
 /*
@@ -198,8 +170,6 @@ static int sock_write(struct file_t *filp, const char *buf, int len)
 
 	/* get socket */
 	sock = &filp->f_inode->u.socket_i;
-	if (sock->flags & SO_ACCEPTCON)
-		return -EINVAL;
 
 	/* check length */
 	if (len < 0)
@@ -211,10 +181,11 @@ static int sock_write(struct file_t *filp, const char *buf, int len)
 	memset(&msg, 0, sizeof(struct msghdr_t));
 	msg.msg_iov = &iov;
 	msg.msg_iovlen = 1;
+	msg.msg_flags = !(filp->f_flags & O_NONBLOCK) ? 0 : MSG_DONTWAIT;
 	iov.iov_base = (void *) buf;
 	iov.iov_len = len;
 
-	return sock->ops->sendmsg(sock, &msg, len, filp->f_flags & O_NONBLOCK, 0);
+	return sock->ops->sendmsg(sock, &msg, len);
 }
 
 /*
@@ -289,7 +260,7 @@ int do_bind(int sockfd, const struct sockaddr *addr, size_t addrlen)
 	int err;
 
 	/* get socket */
-	sock = sockfd_lookup(sockfd, NULL, &err);
+	sock = sockfd_lookup(sockfd, &err);
 	if (!sock)
 		return err;
 
@@ -302,28 +273,14 @@ int do_bind(int sockfd, const struct sockaddr *addr, size_t addrlen)
 int do_connect(int sockfd, const struct sockaddr *addr, size_t addrlen)
 {
 	struct socket_t *sock;
-	struct file_t *filp;
 	int err;
 
 	/* get socket */
-	sock = sockfd_lookup(sockfd, &filp, &err);
+	sock = sockfd_lookup(sockfd, &err);
 	if (!sock)
 		return err;
 
-	/* check state */
-	switch (sock->state) {
-		case SS_UNCONNECTED:
-		case SS_CONNECTING:
-			break;
-		case SS_CONNECTED:
-			if (sock->type == SOCK_DGRAM)
-				break;
-			return -EISCONN;
-		default:
-			return -EINVAL;
-	}
-
-	return sock->ops->connect(sock, addr, addrlen, filp->f_flags);
+	return sock->ops->connect(sock, addr, addrlen, sock->filp->f_flags);
 }
 
 /*
@@ -335,24 +292,11 @@ int do_listen(int sockfd, int backlog)
 	int err;
 
 	/* get socket */
-	sock = sockfd_lookup(sockfd, NULL, &err);
+	sock = sockfd_lookup(sockfd, &err);
 	if (!sock)
 		return err;
 
-	/* check socket state */
-	if (sock->state != SS_UNCONNECTED)
-		return -EINVAL;
-
-	/* listen not supported */
-	if (!sock->ops || !sock->ops->listen)
-		return -EOPNOTSUPP;
-
-	/* protocol listen */
-	err = sock->ops->listen(sock, backlog);
-	if (err == 0)
-		sock->flags |= SO_ACCEPTCON;
-
-	return err;
+	return sock->ops->listen(sock, backlog);
 }
 
 /*
@@ -361,24 +305,17 @@ int do_listen(int sockfd, int backlog)
 int do_accept(int sockfd, struct sockaddr *addr, size_t *addrlen)
 {
 	struct socket_t *sock, *new_sock;
-	struct file_t *filp;
 	int err, fd;
 
 	/* get socket */
-	sock = sockfd_lookup(sockfd, &filp, &err);
+	sock = sockfd_lookup(sockfd, &err);
 	if (!sock)
 		return err;
 	
-	/* check socket state */
-	if (sock->state != SS_UNCONNECTED)
-		return -EINVAL;
-	if (!(sock->flags & SO_ACCEPTCON))
-		return -EINVAL;
-
 	/* allocate a new socket */
 	new_sock = sock_alloc();
 	if (!new_sock)
-		return -ENOSR;
+		return -EMFILE;
 
 	/* set socket operations */
 	new_sock->type = sock->type;
@@ -390,14 +327,16 @@ int do_accept(int sockfd, struct sockaddr *addr, size_t *addrlen)
 		goto err_release;
 
 	/* protocol accept */
-	err = new_sock->ops->accept(sock, new_sock, filp->f_flags);
+	err = new_sock->ops->accept(sock, new_sock, sock->filp->f_flags);
 	if (err < 0)
 		goto err_release;
 
 	/* get file descriptor */
-	fd = err = get_fd(new_sock->inode);
+	err = get_fd(new_sock->inode);
 	if (err < 0)
 		goto err_release;
+	else
+		fd = err;
 
 	/* set socket file */
 	sock->filp = current_task->files->filp[fd];
@@ -419,14 +358,17 @@ int do_sendto(int sockfd, const void *buf, size_t len, int flags, const struct s
 {
 	struct socket_t *sock;
 	struct msghdr_t msg;
-	struct file_t *filp;
 	struct iovec_t iov;
 	int err;
 
 	/* get socket */
-	sock = sockfd_lookup(sockfd, &filp, &err);
+	sock = sockfd_lookup(sockfd, &err);
 	if (!sock)
 		return err;
+
+	/* set flags */
+	if (sock->filp->f_flags & O_NONBLOCK)
+		flags |= MSG_DONTWAIT;
 
 	/* create message */
 	iov.iov_base = (void *) buf;
@@ -435,8 +377,9 @@ int do_sendto(int sockfd, const void *buf, size_t len, int flags, const struct s
 	msg.msg_namelen = addrlen;
 	msg.msg_iov = &iov;
 	msg.msg_iovlen = 1;
+	msg.msg_flags = flags;
 
-	return sock->ops->sendmsg(sock, &msg, len, filp->f_flags & O_NONBLOCK, flags);
+	return sock->ops->sendmsg(sock, &msg, len);
 }
 
 /*
@@ -444,26 +387,39 @@ int do_sendto(int sockfd, const void *buf, size_t len, int flags, const struct s
  */
 int do_recvfrom(int sockfd, const void *buf, size_t len, int flags, struct sockaddr *src_addr, size_t *addrlen)
 {
+	char address[MAX_SOCK_ADDR];
 	struct socket_t *sock;
 	struct msghdr_t msg;
-	struct file_t *filp;
 	struct iovec_t iov;
 	int err;
 
 	/* get socket */
-	sock = sockfd_lookup(sockfd, &filp, &err);
+	sock = sockfd_lookup(sockfd, &err);
 	if (!sock)
 		return err;
+
+	/* set flags */
+	if (sock->filp->f_flags & O_NONBLOCK)
+		flags |= MSG_DONTWAIT;
 
 	/* create message */
 	iov.iov_base = (void *) buf;
 	iov.iov_len = len;
-	msg.msg_name = (struct sockaddr *) src_addr;
+	msg.msg_name = address;
 	msg.msg_namelen = MAX_SOCK_ADDR;
 	msg.msg_iov = &iov;
 	msg.msg_iovlen = 1;
 
-	return sock->ops->recvmsg(sock, &msg, len, filp->f_flags & O_NONBLOCK, flags, addrlen);
+	/* receive message */
+	err = sock->ops->recvmsg(sock, &msg, len, flags);
+
+	/* set source address */
+	if (err >= 0 && src_addr) {
+		*addrlen = msg.msg_namelen;
+		memcpy(src_addr, address, *addrlen);
+	}
+
+	return err;
 }
 
 /*

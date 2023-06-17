@@ -16,10 +16,16 @@
 #define SOCK_STREAM		1
 #define SOCK_DGRAM		2
 #define SOCK_RAW		3
+#define SOCK_SEQPACKET		5
+#define SOCK_PACKET		10
 
 /* flags for send/recv */
 #define MSG_OOB			1
 #define MSG_PEEK		2
+#define MSG_TRUNC		0x20
+#define MSG_DONTWAIT		0x40
+#define MSG_SYN			0x400
+#define MSG_NOSIGNAL		0x4000
 
 /* flags for shutdown */
 #define RCV_SHUTDOWN		1
@@ -54,6 +60,8 @@
 #define SO_WAITDATA		(1 << 17)
 #define SO_NOSPACE		(1 << 18)
 
+#define SOMAXCONN		128
+
 /*
  * Socket address.
  */
@@ -85,8 +93,6 @@ struct socket_t {
 	struct file_t *			filp;			/* associated file */
 	struct sock_t *			sk;			/* protocol socket */
 	struct proto_ops_t *		ops;			/* protocol operations */
-	struct socket_t *		conn;			/* server socket connected to */
-	struct socket_t *		iconn;			/* incomplete client connections */
 	struct socket_t *		next;			/* next socket */
 };
 
@@ -98,6 +104,7 @@ struct msghdr_t {
 	size_t				msg_namelen;		/* socket name length */
 	struct iovec_t *		msg_iov;		/* data */
 	size_t				msg_iovlen;		/* data length */
+	uint32_t			msg_flags;		/* flags */
 };
 
 /*
@@ -112,16 +119,16 @@ struct proto_ops_t {
 	int (*connect)(struct socket_t *, const struct sockaddr *, size_t, int);
 	int (*listen)(struct socket_t *, int);
 	int (*accept)(struct socket_t *, struct socket_t *, int);
-	int (*sendmsg)(struct socket_t *, struct msghdr_t *, size_t, int, int);
-	int (*recvmsg)(struct socket_t *, struct msghdr_t *, size_t, int, int, size_t *);
+	int (*sendmsg)(struct socket_t *, struct msghdr_t *, size_t);
+	int (*recvmsg)(struct socket_t *, struct msghdr_t *, size_t, int);
 };
 
 /* protocol creation */
 int unix_create(struct socket_t *sock, int protocol);
 
 /* iovec operations */
-void memcpy_toiovec(struct iovec_t *iov, void *buf, size_t len);
-void memcpy_fromiovec(void *buf, struct iovec_t *iov, size_t len);
+int memcpy_toiovec(struct iovec_t *iov, void *buf, size_t len);
+int memcpy_fromiovec(void *buf, struct iovec_t *iov, size_t len);
 
 /* socket system calls */
 int do_socket(int domain, int type, int protocol);

@@ -1,4 +1,5 @@
 #include <net/sock.h>
+#include <net/inet/tcp.h>
 #include <proc/sched.h>
 #include <stderr.h>
 
@@ -25,14 +26,66 @@ struct sock_t *sk_alloc()
  */
 void sk_free(struct sock_t *sk)
 {
-	if (sk)
-		kfree(sk);
+	if (!sk)
+		return;
+
+	/* destruct socket */
+	if (sk->destruct)
+		sk->destruct(sk);
+
+	/* free socket */
+	kfree(sk);
+}
+
+/*
+ * Default socket callback : wake up a socket.
+ */
+static void sock_def_wakeup(struct sock_t *sk)
+{
+	if(!sk->dead)
+		task_wakeup_all(sk->sleep);
+}
+
+/*
+ * Default socket callback : wake up a socket.
+ */
+static void sock_def_readable(struct sock_t *sk, size_t len)
+{
+	UNUSED(len);
+
+	if(!sk->dead)
+		task_wakeup_all(sk->sleep);
+}
+
+/*
+ * Init a socket with default values.
+ */
+void sock_init_data(struct socket_t *sock, struct sock_t *sk)
+{
+	skb_queue_head_init(&sk->receive_queue);
+	skb_queue_head_init(&sk->write_queue);
+	
+	sk->state = TCP_CLOSE;
+	sk->rcvbuf = SK_RMEM_MAX;
+	sk->sndbuf = SK_WMEM_MAX;
+	sk->sleep = NULL;
+	sk->socket = sock;
+
+	if(sock) {
+		sk->type = sock->type;
+		sk->sleep = &sock->wait;
+		sock->sk = sk;
+	}
+
+	sk->state_change = sock_def_wakeup;
+	sk->data_ready = sock_def_readable;
+	sk->write_space = sock_def_wakeup;
 }
 
 /*
  * Allocate a write socket buffer.
  */
-static struct sk_buff_t *sock_wmalloc(struct sock_t *sk, size_t size)
+struct sk_buff_t *sock_wmalloc(struct sock_t *sk, size_t size)
 {
 	struct sk_buff_t *skb;
 
@@ -40,8 +93,10 @@ static struct sk_buff_t *sock_wmalloc(struct sock_t *sk, size_t size)
 	if (sk) {
 		if (sk->wmem_alloc + size < sk->sndbuf) {
 			skb = skb_alloc(size);
-			if (sk)
+			if (skb) {
 				sk->wmem_alloc += skb->truesize;
+				skb->sk = sk;
+			}
 
 			return skb;
 		}

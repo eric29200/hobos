@@ -8,18 +8,99 @@
 #include <fcntl.h>
 #include <stderr.h>
 
+#define unix_peer(sk)		((sk)->pair)
+
+#define UNIX_DELETE_DELAY	(1 * HZ)
+#define UNIX_DESTROY_DELAY	(10 * HZ)
+
+#define UNIX_MAX_DGRAM_QLEN	10
+
+/* prototypes */
+static int unix_release_sock(unix_socket_t *sk);
+static struct sock_t *unix_create1(struct socket_t *sock);
+
 /* UNIX sockets list */
 static unix_socket_t *unix_socket_list = NULL;
+
+/* wait queues */
+struct wait_queue_t *unix_ack_wqueue = NULL;
+struct wait_queue_t *unix_dgram_wqueue = NULL;
+
+/*
+ * Lock a UNIX socket.
+ */
+static void unix_lock(unix_socket_t *sk)
+{
+	sk->sock_readers++;
+}
+
+/*
+ * Unlock a UNIX socket.
+ */
+static void unix_unlock(unix_socket_t *sk)
+{
+	sk->sock_readers--;
+}
+
+/*
+ * Is a UNOX socket locked ?
+ */
+static int unix_locked(unix_socket_t *sk)
+{
+	return sk->sock_readers != 0;
+}
+
+/*
+ * Release a UNIX address.
+ */
+static void unix_release_addr(struct unix_address_t *addr)
+{
+	if (addr && --addr->refcnt == 0)
+		kfree(addr);
+}
+
+/*
+ * Destruct a UNIX address.
+ */
+static void unix_destruct_addr(struct sock_t *sk)
+{
+	unix_release_addr(sk->protinfo.af_unix.addr);
+}
+
+/*
+ * Are 2 sockets connected ?
+ */
+static int unix_our_peer(unix_socket_t *sk, unix_socket_t *osk)
+{
+	return unix_peer(osk) == sk;
+}
+
+/*
+ * Is a socket writable ?
+ */
+static int unix_may_send(unix_socket_t *sk, unix_socket_t *osk)
+{
+	return (unix_peer(osk) == NULL || unix_our_peer(sk, osk));
+}
 
 /*
  * Make name = end name with '\0'.
  */
-static void unix_mkname(struct sockaddr_un *sunaddr, size_t len)
+static int unix_mkname(struct sockaddr_un *sunaddr, size_t len)
 {
-	if (len >= sizeof(struct sockaddr_un))
-		len = sizeof(struct sockaddr_un) - 1;
+	/* check input address */
+	if (len <= sizeof(short) || len > sizeof(struct sockaddr_un))
+		return -EINVAL;
+	if (!sunaddr || sunaddr->sun_family != AF_UNIX)
+		return -EINVAL;
 
+	/* abstract address */
+	if (!sunaddr->sun_path[0])
+		return len;
+
+	/* end address */
 	((char *) sunaddr)[len] = 0;
+	return strlen(sunaddr->sun_path) + 1 + sizeof(short);
 }
 
 /*
@@ -49,15 +130,38 @@ static void unix_remove_socket(unix_socket_t *sk)
 }
 
 /*
- * Find a UNIX socket.
+ * Find a UNIX socket by its inode.
  */
-static unix_socket_t *unix_find_socket(struct inode_t *inode)
+static unix_socket_t *unix_find_socket_by_inode(struct inode_t *inode)
 {
 	unix_socket_t *sk;
 
-	for (sk = unix_socket_list; sk != NULL; sk = sk->next)
-		if (sk->protinfo.af_unix.inode == inode)
+	for (sk = unix_socket_list; sk != NULL; sk = sk->next) {
+		if (sk->protinfo.af_unix.inode == inode) {
+			unix_lock(sk);
 			return sk;
+		}
+	}
+
+	return NULL;
+}
+
+/*
+ * Find a UNIX socket by its name.
+ */
+static unix_socket_t *unix_find_socket_by_name(struct sockaddr_un *sunaddr, size_t len, int type)
+{
+	struct unix_address_t *addr;
+	unix_socket_t *sk;
+
+	for (sk = unix_socket_list; sk != NULL; sk = sk->next) {
+		addr = sk->protinfo.af_unix.addr;
+
+		if (addr->len == len && memcmp(addr->name, sunaddr, len) == 0 && sk->type == type) {
+			unix_lock(sk);
+			return sk;
+		}
+	}
 
 	return NULL;
 }
@@ -65,29 +169,73 @@ static unix_socket_t *unix_find_socket(struct inode_t *inode)
 /*
  * Find a UNIX socket.
  */
-static unix_socket_t *unix_find_other(const char *pathname, int *err)
+static unix_socket_t *unix_find_other(struct sockaddr_un *sunaddr, size_t len, int type, int *err)
 {
 	struct inode_t *inode;
 	unix_socket_t *sk;
 	int ret;
 
+	/* abstract socket */
+	if (!sunaddr->sun_path[0]) {
+		sk = unix_find_socket_by_name(sunaddr, len, type);
+		if (!sk)
+			*err = -ECONNREFUSED;
+
+		return sk;
+	}
+
 	/* get inode */
-	ret = open_namei(AT_FDCWD, NULL, pathname, O_RDWR, S_IFSOCK, &inode);
+	ret = open_namei(AT_FDCWD, NULL, sunaddr->sun_path, O_RDWR, S_IFSOCK, &inode);
 	if (ret) {
 		*err = ret;
 		return NULL;
 	}
 
 	/* get UNIX socket */
-	sk = unix_find_socket(inode);
+	sk = unix_find_socket_by_inode(inode);
 	if (!sk) {
 		iput(inode);
 		*err = -ECONNREFUSED;
 		return NULL;
 	}
 
+	/* release inode */
 	iput(inode);
+
+	/* check socket type */
+	if (sk->type != type) {
+		*err = -EPROTOTYPE;
+		return NULL;
+	}
+
 	return sk;
+}
+
+/*
+ * Try to destroy a UNIX socket.
+ */
+static void unix_destroy_timer(void *arg)
+{
+	unix_socket_t *sk = (unix_socket_t *) arg;
+
+	/* free socket if not used anymore */
+	if (!unix_locked(sk) && sk->wmem_alloc == 0) {
+		sk_free(sk);
+		return;
+	}
+
+	/* retry 10 seconds later */
+	sk->timer.expires = jiffies + UNIX_DESTROY_DELAY;
+	timer_event_add(&sk->timer);
+}
+
+/*
+ * Delay a UNIX socket deletion (try after 10 seconds);
+ */
+static void unix_delayed_delete(unix_socket_t *sk)
+{
+	timer_event_init(&sk->timer, unix_destroy_timer, sk, jiffies + UNIX_DELETE_DELAY);
+	timer_event_add(&sk->timer);
 }
 
 /*
@@ -96,27 +244,22 @@ static unix_socket_t *unix_find_other(const char *pathname, int *err)
 static void unix_destroy_socket(unix_socket_t *sk)
 {
 	struct sk_buff_t *skb;
-	unix_socket_t *osk;
 
-	/* remove socket from list */
+	/* remove socket */
 	unix_remove_socket(sk);
 
-	/* free all incoming messages */
+	/* free received buffers */
 	for (;;) {
-		/* next message */
+		/* get next buffer */
 		skb = skb_dequeue(&sk->receive_queue);
 		if (!skb)
 			break;
 
-		/* listening socket : close end point */
-		if (sk->state == TCP_LISTEN) {
-			osk = skb->sk;
-			osk->state = TCP_CLOSE;
-			skb_free(skb, FREE_WRITE);
-			osk->state_change(osk);
-		} else {
-			skb_free(skb, FREE_WRITE);
-		}
+		if (sk->state == TCP_LISTEN)
+			unix_release_sock(skb->sk);
+
+		/* free buffer */		
+		skb_free(skb);
 	}
 
 	/* release inode */
@@ -124,58 +267,54 @@ static void unix_destroy_socket(unix_socket_t *sk)
 		iput(sk->protinfo.af_unix.inode);
 		sk->protinfo.af_unix.inode = NULL;
 	}
-
-	/* decrement locks */
-	sk->protinfo.af_unix.locks--;
-
-	/* free socket */
-	if (sk->protinfo.af_unix.locks == 0) {
-		if (sk->protinfo.af_unix.name)
-			kfree(sk->protinfo.af_unix.name);
-
+	
+	/* unlocked socket, with no writing buffers remaining : free it immediately */
+	if (!unix_locked(sk) && sk->wmem_alloc == 0) {
 		sk_free(sk);
+		return;
 	}
+	
+	/* else delay delete */
+	sk->state = TCP_CLOSE;
+	sk->dead = 1;
+	unix_delayed_delete(sk);
 }
 
 /*
- * Wait for data.
+ * Release a UNIX socket.
  */
-static void unix_data_wait(unix_socket_t *sk)
+static int unix_release_sock(unix_socket_t *sk)
 {
-	if (!skb_peek(&sk->receive_queue)) {
-		sk->socket->flags |= SO_WAITDATA;
-		task_sleep(sk->sleep);
-		sk->socket->flags &= ~SO_WAITDATA;
+	unix_socket_t *skpair;
+
+	/* set socket dead */
+	sk->state_change(sk);
+	sk->dead = 1;
+	sk->socket = NULL;
+
+	/* wake up waiting processes */
+	if (sk->state == TCP_LISTEN)
+		task_wakeup(&unix_ack_wqueue);
+	if (sk->state == SOCK_DGRAM)
+		task_wakeup(&unix_dgram_wqueue);
+
+	/* handle pair socket */
+	skpair = unix_peer(sk);
+	if (skpair) {
+		/* shutdown pair */
+		if (sk->type == SOCK_STREAM && unix_our_peer(sk, skpair)) {
+			skpair->data_ready(skpair, 0);
+			skpair->shutdown = SHUTDOWN_MASK;
+		}
+
+		/* unlock pair */
+		unix_unlock(skpair);
 	}
-}
 
-/*
- * State change callback.
- */
-static void unix_state_change_cb(struct sock_t *sk)
-{
-	if (!sk->dead)
-		task_wakeup_all(sk->sleep);
-}
+	/* destroy socket */
+	unix_destroy_socket(sk);
 
-/*
- * Data ready callback.
- */
-static void unix_data_ready_cb(struct sock_t *sk, size_t len)
-{
-	UNUSED(len);
-
-	if (!sk->dead)
-		task_wakeup_all(sk->sleep);
-}
-
-/*
- * Write space callback.
- */
-static void unix_write_space_cb(struct sock_t *sk)
-{
-	if (!sk->dead)
-		task_wakeup_all(sk->sleep);
+	return 0;
 }
 
 /*
@@ -192,7 +331,7 @@ static int unix_dup(struct socket_t *new_sock, struct socket_t *old_sock)
  */
 static int unix_release(struct socket_t *sock, struct socket_t *peer)
 {
-	unix_socket_t *sk_pair, *sk = sock->sk;
+	unix_socket_t *sk = sock->sk;
 
 	/* unused peer */
 	UNUSED(peer);
@@ -201,26 +340,12 @@ static int unix_release(struct socket_t *sock, struct socket_t *peer)
 	if (!sk)
 		return 0;
 
-	/* mark socket dead */
-	sk->state_change(sk);
-	sk->dead = 1;
+	/* update socket state */
+	sock->sk = NULL;
+	if (sock->state != SS_UNCONNECTED)
+		sock->state = SS_DISCONNECTING;
 
-	/* alarm pair socket */
-	sk_pair = (unix_socket_t *) sk->protinfo.af_unix.other;
-	if (sk->type == SOCK_STREAM && sk_pair && sk_pair->state != TCP_LISTEN) {
-		sk_pair->shutdown = SHUTDOWN_MASK;
-		sk_pair->state_change(sk_pair);
-	}
-
-	/* decrement pair socket locks */
-	if (sk_pair)
-		sk_pair->protinfo.af_unix.locks--;
-
-	/* destroy socket */
-	sk->protinfo.af_unix.other = NULL;
-	unix_destroy_socket(sk);
-
-	return 0;
+	return unix_release_sock(sk);
 }
  
  /*
@@ -233,23 +358,21 @@ static int unix_getname(struct socket_t *sock, struct sockaddr *addr, size_t *ad
 
 	/* get peer name */	
 	if (peer) {
-		if (!sk->protinfo.af_unix.other)
+		if (!unix_peer(sk))
 			return -ENOTCONN;
-		sk = sk->protinfo.af_unix.other;
+		sk = unix_peer(sk);
 	}
 
-	/* set family */
-	sunaddr->sun_family = AF_UNIX;
-
 	/* not bound */
-	if (!sk->protinfo.af_unix.name) {
+	if (!sk->protinfo.af_unix.addr) {
+		sunaddr->sun_family = AF_UNIX;
 		*sunaddr->sun_path = 0;
-		*addrlen = sizeof(sunaddr->sun_family) + 1;
+		*addrlen = sizeof(short);
 		return 0;
 	}
 
-	*addrlen = sizeof(sunaddr->sun_family) + strlen(sk->protinfo.af_unix.name) + 1;
-	strcpy(sunaddr->sun_path, sk->protinfo.af_unix.name);
+	*addrlen = sk->protinfo.af_unix.addr->len;
+	memcpy(sunaddr, sk->protinfo.af_unix.addr->name, *addrlen);
 	return 0;
 }
 
@@ -259,513 +382,363 @@ static int unix_getname(struct socket_t *sock, struct sockaddr *addr, size_t *ad
 static int unix_bind(struct socket_t *sock, const struct sockaddr *addr, size_t addrlen)
 {
 	struct sockaddr_un *sunaddr = (struct sockaddr_un *) addr;
-	unix_socket_t *sk = sock->sk;
-	int ret;
-
-	/* already bound */
-	if (sk->protinfo.af_unix.name)
-		return -EINVAL;
-
-	/* check input address */
-	if (addrlen > sizeof(struct sockaddr_un) || addrlen < 3 || sunaddr->sun_family != AF_UNIX)
-		return -EINVAL;
-
-	/* fix path name */
-	unix_mkname(sunaddr, addrlen);
-
-	/* already bound */
-	if (sk->protinfo.af_unix.inode)
-		return -EINVAL;
-
-	/* allocate sock name */
-	sk->protinfo.af_unix.name = kmalloc(addrlen + 1);
-	if (!sk->protinfo.af_unix.name)
-		return -EINVAL;
-
-	/* set sock name */
-	memcpy(sk->protinfo.af_unix.name, sunaddr->sun_path, addrlen + 1);
-
-	/* create socket and try to open it */
-	ret = do_mknod(AT_FDCWD, sk->protinfo.af_unix.name, S_IFSOCK | S_IRWXUGO, 0);
-	if (ret == 0)
-		ret = open_namei(AT_FDCWD, NULL, sk->protinfo.af_unix.name, O_RDWR, S_IFSOCK, &sk->protinfo.af_unix.inode);
-
-	/* free address on error */
-	if (ret < 0) {
-		kfree(sk->protinfo.af_unix.name);
-		sk->protinfo.af_unix.name = NULL;
-		return ret == -EEXIST ? -EADDRINUSE : ret;
-	}
-
-	return 0;
-}
-
-/*
- * Initiate a connection on a UNIX socket.
- */
-static int unix_connect(struct socket_t *sock, const struct sockaddr *addr, size_t addrlen, int flags)
-{
-	struct sockaddr_un *sunaddr = (struct sockaddr_un *) addr;
-	unix_socket_t *other, *sk = sock->sk;
-	struct sk_buff_t *skb;
+	unix_socket_t *osk, *sk = sock->sk;
+	struct unix_address_t *unix_addr;
+	struct inode_t *inode;
 	int err;
 
-	/* SOCK_STREAM : check socket state */
-	if (sk->type == SOCK_STREAM && sk->protinfo.af_unix.other) {
-		if (sock->state == SS_CONNECTING && sk->state == TCP_ESTABLISHED) {
-			sock->state = SS_CONNECTED;
-			return 0;
-		}
-
-		if (sock->state == SS_CONNECTING && sk->state == TCP_CLOSE) {
-			sock->state = SS_UNCONNECTED;
-			return -ECONNREFUSED;
-		}
-
-		if (sock->state != SS_CONNECTING)
-			return -EISCONN;
-
-		if (flags & O_NONBLOCK)
-			return -EALREADY;
-	}
-
-	/* check input address */
-	if (addrlen < 3 || sunaddr->sun_family != AF_UNIX)
+	/* already bound */
+	if (sk->protinfo.af_unix.addr || sk->protinfo.af_unix.inode || sunaddr->sun_family != AF_UNIX)
 		return -EINVAL;
 
 	/* fix path name */
-	unix_mkname(sunaddr, addrlen);
+	err = unix_mkname(sunaddr, addrlen);
+	if (err < 0)
+		return err;
+	else
+		addrlen = err;
 
-	/* Datagram socket */
-	if (sk->type == SOCK_DGRAM) {
-		/* disconnect if needed */
-		if (sk->protinfo.af_unix.other) {
-			sk->protinfo.af_unix.other->protinfo.af_unix.locks--;
-			sk->protinfo.af_unix.other = NULL;
-			sock->state = SS_UNCONNECTED;
+	/* allocate UNIX address */
+	unix_addr = (struct unix_address_t *) kmalloc(sizeof(struct unix_address_t) + addrlen);
+	if (!unix_addr)
+		return -ENOMEM;
+	
+	/* set UNIX address */
+	memcpy(unix_addr->name, sunaddr, addrlen);
+	unix_addr->len = addrlen;
+	unix_addr->refcnt = 1;
+
+	/* abstract socket */
+	if (!sunaddr->sun_path[0]) {
+		/* address already used */
+		osk = unix_find_socket_by_name(sunaddr, addrlen, sk->type);
+		if (osk) {
+			unix_unlock(osk);
+			unix_release_addr(unix_addr);
+			return -EADDRINUSE;
 		}
 
-		/* find other socket */
-		other = unix_find_other(sunaddr->sun_path, &err);
-		if (!other)
-			return err;
-
-		if (other->type != sk->type)
-			return -EPROTOTYPE;
-
-		/* connected */
-		other->protinfo.af_unix.locks++;
-		sk->protinfo.af_unix.other = other;
-		sock->state = SS_CONNECTED;
-		sk->state = TCP_ESTABLISHED;
+		/* bound */
+		sk->protinfo.af_unix.addr = unix_addr;
 		return 0;
 	}
 
-	/* unconnected socket : send a SYN message */
-	if (sock->state == SS_UNCONNECTED) {
-		/* allocate a socket buffer */
-		skb = sock_alloc_send_skb(sk, 0, 0, &err);
-		if (!skb)
-			return err;
+	/* create socket node */
+	err = do_mknod(AT_FDCWD, sunaddr->sun_path, S_IFSOCK | S_IRWXUGO, 0);
+	if (err == 0)
+		err = open_namei(AT_FDCWD, NULL, sunaddr->sun_path, 0, S_IFSOCK, &inode);
 
-		/* set socket buffer */
-		skb->sk = sk;
-		sk->state = TCP_CLOSE;
-
-		/* find other socket */
-		unix_mkname(sunaddr, addrlen);
-		other = unix_find_other(sunaddr->sun_path, &err);
-		if (!other) {
-			skb_free(skb, FREE_WRITE);
-			return err;
-		}
-
-		/* wrong end point */
-		if (other->type != sk->type) {
-			skb_free(skb, FREE_WRITE);
-			return -EPROTOTYPE;
-		}
-
-		/* queue message in other socket */
-		other->protinfo.af_unix.locks++;
-		other->ack_backlog++;
-		sk->protinfo.af_unix.other = other;
-		skb_queue_tail(&other->receive_queue, skb);
-
-		/* update socket state */
-		sk->state = TCP_SYN_SENT;
-		sock->state = SS_CONNECTING;
-
-		/* wake up other socket */
-		other->data_ready(other, 0);
-	}
-			
-	/* wait for an accept */
-	while (sk->state == TCP_SYN_SENT) {
-		if (flags & O_NONBLOCK)
-			return -EINPROGRESS;
-
-		task_sleep(sk->sleep);
-
-		if (signal_pending(current_task))
-			return -ERESTARTSYS;
+	/* release address on error */
+	if (err) {
+		unix_release_addr(unix_addr);
+		return err == -EEXIST ? -EADDRINUSE : err;
 	}
 	
-	/* check connection */
-	if (sk->state == TCP_CLOSE) {
-		sk->protinfo.af_unix.other->protinfo.af_unix.locks--;
-		sk->protinfo.af_unix.other = NULL;
-		sock->state = SS_UNCONNECTED;
-		return -ECONNREFUSED;
-	}
-	
-	/* done */
-	sock->state = SS_CONNECTED;
-	return 0;
-}
-
-/*
- * Listen on a UNIX socket.
- */
-static int unix_listen(struct socket_t *sock, int backlog)
-{
-	unix_socket_t *sk = sock->sk;
-
-	/* check socket type */
-	if (sk->type != SOCK_STREAM)
-		return -EOPNOTSUPP;
-
-	/* unbounded socket */
-	if (!sk->protinfo.af_unix.name)
-		return -EINVAL;
-
-	sk->max_ack_backlog = backlog;
-	sk->state = TCP_LISTEN;
-	return 0;
-}
-
-/*
- * Accept a UNIX connection.
- */
-static int unix_accept(struct socket_t *sock, struct socket_t *new_sock, int flags)
-{
-	unix_socket_t *tsk, *sk = sock->sk, *new_sk = new_sock->sk;
-	struct sk_buff_t *skb;
-
-	/* check socket */
-	if (sk->type != SOCK_STREAM)
-		return -EOPNOTSUPP;
-	if (sk->state != TCP_LISTEN)
-		return -EINVAL;
-
-	/* copy pathname */
-	if (sk->protinfo.af_unix.name) {
-		new_sk->protinfo.af_unix.name = kmalloc(strlen(sk->protinfo.af_unix.name) + 1);
-		if (!new_sk->protinfo.af_unix.name)
-			return -ENOMEM;
-		strcpy(new_sk->protinfo.af_unix.name, sk->protinfo.af_unix.name);
-	}
-
-	/* wait for a message */
-	for (;;) {
-		skb = skb_dequeue(&sk->receive_queue);
-		if (skb)
-			break;
-
-		if (flags & O_NONBLOCK)
-			return -EAGAIN;
-		
-		task_sleep(sk->sleep);
-
-		if (signal_pending(current_task))
-			return -ERESTARTSYS;
-	}
-
-	/* free socket buffer (just used as a tag) */
-	tsk = skb->sk;
-	skb_free(skb, FREE_WRITE);
-
-	/* connection established */
-	sk->ack_backlog--;
-	new_sk->protinfo.af_unix.other = tsk;
-	tsk->protinfo.af_unix.other = new_sk;
-	tsk->state = TCP_ESTABLISHED;
-	new_sk->state = TCP_ESTABLISHED;
-
-	/* update locks */
-	new_sk->protinfo.af_unix.locks++;
-	sk->protinfo.af_unix.locks--;
-	tsk->protinfo.af_unix.locks++;
-	tsk->state_change(tsk);
+	/* bound */
+	sk->protinfo.af_unix.addr = unix_addr;
+	sk->protinfo.af_unix.inode = inode;
 
 	return 0;
 }
 
 /*
- * Send data.
+ * Initiate a connection on a UNIX datagram socket.
  */
-static int unix_sendmsg(struct socket_t *sock, struct msghdr_t *msg, size_t len, int nonblock, int flags)
+static int unix_dgram_connect(struct socket_t *sock, const struct sockaddr *addr, size_t addrlen, int flags)
 {
-	struct sockaddr_un *sunaddr = msg->msg_name;
-	unix_socket_t *other, *sk = sock->sk;
-	struct sk_buff_t *skb;
-	size_t sent, size;
+	struct sockaddr_un *sunaddr = (struct sockaddr_un *) addr;
+	struct sock_t *other, *sk = sock->sk;
 	int err;
 
-	/* check socket error */
-	if (sk->err)
-		return sock_error(sk);
+	/* unused flags */
+	UNUSED(flags);
 
-	/* unsupported flags */
-	if (flags & MSG_OOB)
-		return -EOPNOTSUPP;
-	else if (flags)
+	/* make name */
+	err = unix_mkname(sunaddr, addrlen);
+	if (err < 0)
+		return err;
+	else
+		addrlen = err;
+
+	/* find destination socket */
+	other = unix_find_other(sunaddr, addrlen, sock->type, &err);
+	if (!other)
+		return err;
+
+	/* check if destination is writable */
+	if (!unix_may_send(sk, other)) {
+		unix_unlock(other);
 		return -EINVAL;
-
-	/* SOCK_STREAM : sunaddr must be NULL */
-	if (sunaddr && sock->type == SOCK_STREAM) {
-		if (sk->state == TCP_ESTABLISHED)
-			return -EISCONN;
-		return -EOPNOTSUPP;
 	}
 
-	/* check end point */
-	if (!sunaddr && !sk->protinfo.af_unix.other)
-		return -ENOTCONN;
-
-	/* send data */
-	for (sent = 0; sent < len;) {
-		size = len - sent;
-
-		/* keep 2 messages in the queue */
-		if (size > (sk->sndbuf - sizeof(struct sk_buff_t)) / 2) {
-			if (sock->type == SOCK_DGRAM)
-				return -EMSGSIZE;
-
-			size = (sk->sndbuf - sizeof(struct sk_buff_t)) / 2;
-		}
-
-		/* allocate a socket buffer */
-		skb = sock_alloc_send_skb(sk, size, nonblock, &err);
-		if (!skb) {
-			if (sent) {
-				sk->err = err;
-				return sent;
-			}
-
-			return err;
-		}
-
-		/* get socket buffer size */
-		size = skb_tailroom(skb);
-
-		/* set socket buffer */
-		skb->sk = sk;
-
-		/* copy message to socket buffer */
-		memcpy_fromiovec(skb_put(skb, size), msg->msg_iov, size);
-
-		/* find end point */
-		if (!sunaddr) {
-			other = sk->protinfo.af_unix.other;
-
-			if (sock->type == SOCK_DGRAM && other->dead) {
-				other->protinfo.af_unix.locks--;
-				sk->protinfo.af_unix.other = NULL;
-				sock->state = SS_UNCONNECTED;
-				skb_free(skb, FREE_WRITE);
-				return sent ? (int) sent : -ECONNRESET;
-			}
-		} else {
-			unix_mkname(sunaddr, msg->msg_namelen);
-			other = unix_find_other(sunaddr->sun_path, &err);
-			if (!other) {
-				skb_free(skb, FREE_WRITE);
-				return sent ? (int) sent : err;
-			}
-		}
-
-		/* queue message */
-		skb_queue_tail(&other->receive_queue, skb);
-
-		/* alarm other socket */
-		other->data_ready(other, size);
-
-		/* update sent size */
-		sent += size;
+	/* if it was connected, disconnect */
+	if (unix_peer(sk)) {
+		unix_unlock(unix_peer(sk));
+		unix_peer(sk) = NULL;
 	}
 
-	return sent;
+	/* connect */
+	unix_peer(sk) = other;
+
+	return 0;
 }
 
 /*
- * Receive data.
+ * UNIX datagram listen.
  */
-static int unix_recvmsg(struct socket_t *sock, struct msghdr_t *msg, size_t len, int nonblock, int flags, size_t *addrlen)
+static int unix_dgram_listen(struct socket_t *sock, int backlog)
+{
+	UNUSED(sock);
+	UNUSED(backlog);
+	return -EOPNOTSUPP;
+}
+
+/*
+ * UNIX datagram accept.
+ */
+static int unix_dgram_accept(struct socket_t *sock, struct socket_t *newsock, int flags)
+{
+	UNUSED(sock);
+	UNUSED(newsock);
+	UNUSED(flags);
+	return -EOPNOTSUPP;
+}
+
+/*
+ * Receive a message.
+ */
+static int unix_dgram_recvmsg(struct socket_t *sock, struct msghdr_t *msg, size_t size, int flags)
+{
+	struct sock_t *sk = sock->sk;
+	struct sk_buff_t *skb;
+	int err;
+
+	/* check flags */
+	if (flags & MSG_OOB)
+		return -EOPNOTSUPP;
+
+	/* reset source address */
+	msg->msg_namelen = 0;
+
+	/* dequeue/peek a socket buffer */
+	skb = skb_recv_datagram(sk, flags, flags & MSG_DONTWAIT, &err);
+	if (!skb)
+		return err;
+
+	/* wake up eventual tasks */
+	task_wakeup_all(&unix_dgram_wqueue);
+
+	/* set source address */
+	if (msg->msg_name) {
+		msg->msg_namelen = sizeof(short);
+
+		if (skb->sk->protinfo.af_unix.addr) {
+			msg->msg_namelen = skb->sk->protinfo.af_unix.addr->len;
+			memcpy(msg->msg_name, skb->sk->protinfo.af_unix.addr->name, skb->sk->protinfo.af_unix.addr->len);
+		}
+	}
+
+	/* check size */
+	if (size > skb->len)
+		size = skb->len;
+	else if (size < skb->len)
+		msg->msg_flags |= MSG_TRUNC;
+
+	/* get skb data */
+	err = skb_copy_datagram_iovec(skb, 0, msg->msg_iov, size);
+
+	/* free socket buffer */
+	skb_free(skb);
+
+	return err ? err : (int) size;
+}
+
+/*
+ * Send a message.
+ */
+static int unix_dgram_sendmsg(struct socket_t *sock, struct msghdr_t *msg, size_t size)
 {
 	struct sockaddr_un *sunaddr = msg->msg_name;
-	size_t ct, n, done, iov_len, copied = 0;
-	struct iovec_t *iov = msg->msg_iov;
-	unix_socket_t *sk = sock->sk;
+	struct sock_t *sk = sock->sk;
 	struct sk_buff_t *skb;
-	void *buf;
+	unix_socket_t *other;
+	int err, namelen = 0;
 
-	/* check socket error */
-	if (sk->err)
-		return sock_error(sk);
-
-	/* unsupported flags */
-	if (flags & MSG_OOB)
+	/* check flags */
+	if (msg->msg_flags & MSG_OOB)
 		return -EOPNOTSUPP;
-	else if (flags)
+	if (msg->msg_flags & ~(MSG_DONTWAIT | MSG_NOSIGNAL))
 		return -EINVAL;
 
-	/* reset address length */
-	if (*addrlen)
-		*addrlen = 0;
-	
-	/* receive each message */
-	for (ct = msg->msg_iovlen; ct != 0; ct--) {
-		/* next iov */
-		buf = iov->iov_base;
-		iov_len = iov->iov_len;
-		iov++;
-		done = 0;
+	/* get destination address */
+	if (msg->msg_namelen) {
+		namelen = unix_mkname(sunaddr, msg->msg_namelen);
+		if (namelen < 0)
+			return namelen;
+	} else {
+		sunaddr = NULL;
+		if (!unix_peer(sk))
+			return -ENOTCONN;
+	}
 
-		while (done < iov_len) {
-			/* done */
-			if (copied && (flags & MSG_PEEK))
-				return copied;
-			if (copied == len)
-				return copied;
+	/* check message size */
+	if (size > sk->sndbuf)
+		return -EMSGSIZE;
 
-			/* dequeue next message */
-			skb = skb_dequeue(&sk->receive_queue);
+	/* allocate a socket buffer */
+	skb = sock_alloc_send_skb(sk, size, msg->msg_flags & MSG_DONTWAIT, &err);
+	if (!skb)
+		return err;
 
-			/* no message available : wait for data */
-			if (!skb) {
-				if (sk->shutdown & RCV_SHUTDOWN)
-					return copied;
-				if (copied)
-					return copied;
-				if (nonblock)
-					return -EAGAIN;
-				if (signal_pending(current_task))
-					return -ERESTARTSYS;
+	/* copy message to socket buffer */
+	skb->h.raw = skb->data;
+	err = memcpy_fromiovec(skb_put(skb, size), msg->msg_iov, size);
+	if (err)
+		goto err_free;
 
-				unix_data_wait(sk);
-				continue;
-			}
+	/* pair socket is dead : reset connection */
+	other = unix_peer(sk);
+	if (other && other->dead)
+	{
+dead:
+		unix_unlock(other);
+		unix_peer(sk) = NULL;
+		other = NULL;
+		err = -ECONNRESET;
 
-			/* set address */
-			if (msg->msg_name) {
-				sunaddr->sun_family = AF_UNIX;
-				if (skb->sk->protinfo.af_unix.name) {
-					memcpy(sunaddr->sun_path, skb->sk->protinfo.af_unix.name, UNIX_PATH_MAX);
-					if (addrlen)
-						*addrlen = strlen(sunaddr->sun_path);
-				}
+		/* if sunaddr != NULL, try to send unconnected message */
+		if (!sunaddr)
+			goto err_free;
+	}
 
-				if (addrlen)
-					*addrlen += sizeof(short);
-			}
+	/* get destination socket */
+	if (!other) {
+		if (!sunaddr) {
+			err = -ECONNRESET;
+			goto err_free;
+		}
 
-			/* copy data to buffer */
-			n = skb->len <= iov_len - done ? skb->len : iov_len - done;
-			memcpy(buf, skb->data, n);
+		/* find destination */
+		other = unix_find_other(sunaddr, namelen, sk->type, &err);
+		if (!other)
+			goto err_free;
 
-			/* update counts */
-			copied += n;
-			done += n;
-			buf += n;
-
-			/* pull data from socket buffer */
-			if (!(flags & MSG_PEEK))
-				skb_pull(skb, n);
-
-			/* remaining data in socket buffer : queue it */
-			if (skb->len) {
-				skb_queue_head(&sk->receive_queue, skb);
-				continue;
-			}
-
-			/* free socket buffer */
-			skb_free(skb, FREE_WRITE);
-
-			/* SOCK_DGRAM : don't wait for full buffer */
-			if (sock->type == SOCK_DGRAM)
-				return copied;
+		/* check if destination is writable */
+		if (!unix_may_send(sk, other)) {
+			err = -EINVAL;
+			goto err_unlock;
 		}
 	}
 
-	return copied;
+	/* sleep while other receive queue is full */
+	while (skb_queue_len(&other->receive_queue) >= UNIX_MAX_DGRAM_QLEN) {
+		/* non blocking */
+		if (msg->msg_flags & MSG_DONTWAIT) {
+			err = -EAGAIN;
+			goto err_unlock;
+		}
+
+		/* sleep */
+		task_sleep(&unix_dgram_wqueue);
+
+		/* handle dead socket */
+		if (other->dead)
+			goto dead;
+		
+		/* handle shutdown */
+		if (sk->shutdown & SEND_SHUTDOWN) {
+			err = -EPIPE;
+			goto err_unlock;
+		}
+
+		/* handle signals */
+		if (signal_pending(current_task))
+		{
+			err = -ERESTARTSYS;
+			goto err_unlock;
+		}
+	}
+
+	/* queue socket buffer in destination socket */
+	skb_queue_tail(&other->receive_queue, skb);
+	other->data_ready(other, size);
+	
+	/* unlock other socket if not connected */
+	if (!unix_peer(sk))
+		unix_unlock(other);
+
+	return size;
+err_unlock:
+	unix_unlock(other);
+err_free:
+	skb_free(skb);
+	return err;
 }
 
 /*
- * Unix protocol operations.
+ * UNIX datagram protocol operations.
  */
-static struct proto_ops_t unix_ops = {
+static struct proto_ops_t unix_dgram_ops = {
 	.family			= AF_UNIX,
 	.dup			= unix_dup,
 	.release		= unix_release,
 	.getname		= unix_getname,
 	.bind			= unix_bind,
-	.connect		= unix_connect,
-	.listen			= unix_listen,
-	.accept			= unix_accept,
-	.sendmsg		= unix_sendmsg,
-	.recvmsg		= unix_recvmsg,
+	.connect		= unix_dgram_connect,
+	.listen			= unix_dgram_listen,
+	.accept			= unix_dgram_accept,
+	.recvmsg		= unix_dgram_recvmsg,
+	.sendmsg		= unix_dgram_sendmsg,
 };
+
+/*
+ * Create a UNIX internal socket.
+ */
+static struct sock_t *unix_create1(struct socket_t *sock)
+{
+	struct sock_t *sk;
+
+	/* allocate a UNIX socket */
+	sk = sk_alloc();
+	if (!sk)
+		return NULL;
+
+	/* init data */
+	sock_init_data(sock, sk);
+
+	/* set UNIX socket */
+	sk->destruct = unix_destruct_addr;
+	sk->protinfo.af_unix.family = PF_UNIX;
+	sk->protinfo.af_unix.inode = NULL;
+	
+	/* insert UNIX socket */
+	unix_insert_socket(sk);
+
+	return sk;
+}
 
 /*
  * Create a UNIX socket.
  */
 int unix_create(struct socket_t *sock, int protocol)
 {
-	unix_socket_t *sk;
-
 	/* check protocol */
 	if (protocol && protocol != PF_UNIX)
 		return -EPROTONOSUPPORT;
 
 	/* check socket type */
 	switch(sock->type) {
-		case SOCK_STREAM:
-			sock->ops = &unix_ops;
-			break;
 		case SOCK_DGRAM:
-			sock->ops = &unix_ops;
+			sock->ops = &unix_dgram_ops;
 			break;
 		case SOCK_RAW:
 			sock->type = SOCK_DGRAM;
-			sock->ops = &unix_ops;
+			sock->ops = &unix_dgram_ops;
 			break;
 		default:
 			return -ESOCKTNOSUPPORT;
 	}
 
-	/* allocate UNIX socket */
-	sk = (unix_socket_t *) sk_alloc();
-	if (!sk)
-		return -ENOMEM;
-
-	/* set socket */
-	sk->type = sock->type;
-	skb_queue_head_init(&sk->write_queue);
-	skb_queue_head_init(&sk->receive_queue);
-	sk->protinfo.af_unix.family = AF_UNIX;
-	sk->protinfo.af_unix.inode = NULL;
-	sk->protinfo.af_unix.locks = 1;
-	sk->rcvbuf = SK_RMEM_MAX;
-	sk->sndbuf = SK_WMEM_MAX;
-	sk->state = TCP_CLOSE;
-	sk->state_change = unix_state_change_cb;
-	sk->data_ready = unix_data_ready_cb;
-	sk->write_space = unix_write_space_cb;
-	sk->socket = sock;
-	sock->sk = sk;
-	sk->sleep = &sock->wait;
-	unix_insert_socket(sk);
-
-	return 0;
+	/* create internal socket */
+	return unix_create1(sock) ? 0 : -ENOMEM;
 }
