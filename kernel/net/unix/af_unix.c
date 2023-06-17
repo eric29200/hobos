@@ -84,6 +84,18 @@ static int unix_may_send(unix_socket_t *sk, unix_socket_t *osk)
 }
 
 /*
+ * Sleep until data has arrive.
+ */
+static void unix_data_wait(unix_socket_t * sk)
+{
+	if (!skb_peek(&sk->receive_queue)) {
+		sk->socket->flags |= SO_WAITDATA;
+		task_sleep(sk->sleep);
+		sk->socket->flags &= ~SO_WAITDATA;
+	}
+}
+
+/*
  * Make name = end name with '\0'.
  */
 static int unix_mkname(struct sockaddr_un *sunaddr, size_t len)
@@ -484,6 +496,131 @@ static int unix_dgram_connect(struct socket_t *sock, const struct sockaddr *addr
 }
 
 /*
+ * Initiate a connection on a UNIX stream socket.
+ */
+static int unix_stream_connect(struct socket_t *sock, const struct sockaddr *addr, size_t addrlen, int flags)
+{
+	struct sockaddr_un *sunaddr = (struct sockaddr_un *) addr;
+	struct sock_t *newsk = NULL, *sk = sock->sk;
+	struct sk_buff_t *skb = NULL;
+	unix_socket_t *other = NULL;
+	int err;
+
+	/* make name */
+	err = unix_mkname(sunaddr, addrlen);
+	if (err < 0)
+		return err;
+	else
+		addrlen = err;
+
+restart:
+	/* find listening sock */
+	other = unix_find_other(sunaddr, addrlen, sk->type, &err);
+	if (!other)
+		return -ECONNREFUSED;
+
+	/* wait for connection */
+	while (other->ack_backlog >= other->max_ack_backlog) {
+		/* unlock other socket while waiting */
+		unix_unlock(other);
+
+		/* handle dead socket */
+		if (other->dead || other->state != TCP_LISTEN)
+			return -ECONNREFUSED;
+
+		/* non blocking */
+		if (flags & O_NONBLOCK)
+			return -EAGAIN;
+		
+		/* sleep */
+		task_sleep(&unix_ack_wqueue);
+
+		/* handle signals */
+		if (signal_pending(current_task))
+			return -ERESTARTSYS;
+
+		/* retry */
+		goto restart;
+        }
+
+	/* create new sock for complete connection */
+	newsk = unix_create1(NULL);
+	if (!newsk) {
+		err = -ENOMEM;
+		goto out;
+	}
+
+	/* allocate skb for sending to listening sock */
+	skb = sock_wmalloc(newsk, 1);
+	if (!skb) {
+		err = -ENOMEM;
+		goto out;
+	}
+
+	/* check socket state */
+	if (sock->state != SS_UNCONNECTED) {
+		err = sock->state == SS_CONNECTED ? -EISCONN : -EINVAL;
+		goto out;
+	}
+
+	/* check socket state */
+	if (sk->state != TCP_CLOSE) {
+		err = -EINVAL;
+		goto out;
+	}
+
+	/* check listener state */
+	if (other->dead || other->state != TCP_LISTEN) {
+		err = -ECONNREFUSED;
+		goto out;
+	}
+
+	/* send a SYN message */
+	UNIXCB(skb).attr = MSG_SYN;
+
+	/* set up connecting socket */
+	sock->state = SS_CONNECTED;
+	unix_peer(sk) = newsk;
+	unix_lock(sk);
+	sk->state = TCP_ESTABLISHED;
+
+	/* set up newly created sock */
+	unix_peer(newsk) = sk;
+	unix_lock(newsk);
+	newsk->state = TCP_ESTABLISHED;
+	newsk->type = SOCK_STREAM;
+
+	/* copy address information from listening to new sock */
+	if (other->protinfo.af_unix.addr)
+	{
+		other->protinfo.af_unix.addr->refcnt++;
+		newsk->protinfo.af_unix.addr = other->protinfo.af_unix.addr;
+	}
+
+	/* set inode */
+	if (other->protinfo.af_unix.inode) {
+		newsk->protinfo.af_unix.inode = other->protinfo.af_unix.inode;
+		newsk->protinfo.af_unix.inode->i_ref++;
+	}
+
+	/* send info to listening sock */
+	other->ack_backlog++;
+	skb_queue_tail(&other->receive_queue,skb);
+	other->data_ready(other, 0);
+	unix_unlock(other);
+
+	return 0;
+out:
+	if (skb)
+		skb_free(skb);
+	if (newsk)
+		unix_destroy_socket(newsk);
+	if (other)
+		unix_unlock(other);
+	return err;
+}
+
+/*
  * UNIX datagram listen.
  */
 static int unix_dgram_listen(struct socket_t *sock, int backlog)
@@ -491,6 +628,33 @@ static int unix_dgram_listen(struct socket_t *sock, int backlog)
 	UNUSED(sock);
 	UNUSED(backlog);
 	return -EOPNOTSUPP;
+}
+
+/*
+ * UNIX stream listen.
+ */
+static int unix_stream_listen(struct socket_t *sock, int backlog)
+{
+	struct sock_t *sk = sock->sk;
+
+	/* check socket state */
+	if (sock->state != SS_UNCONNECTED) 
+		return -EINVAL;
+	if (sock->type != SOCK_STREAM)
+		return -EOPNOTSUPP;
+
+	/* unbound socket */
+	if (!sk->protinfo.af_unix.addr)
+		return -EINVAL;
+	if (backlog > SOMAXCONN)
+		backlog = SOMAXCONN;
+
+	/* update socket state */
+	sk->max_ack_backlog = backlog;
+	sk->state = TCP_LISTEN;
+	sock->flags |= SO_ACCEPTCON;
+
+	return 0;
 }
 
 /*
@@ -502,6 +666,73 @@ static int unix_dgram_accept(struct socket_t *sock, struct socket_t *newsock, in
 	UNUSED(newsock);
 	UNUSED(flags);
 	return -EOPNOTSUPP;
+}
+
+/*
+ * UNIX stream accept.
+ */
+static int unix_stream_accept(struct socket_t *sock, struct socket_t *newsock, int flags)
+{
+	unix_socket_t *tsk, *sk = sock->sk, *newsk = newsock->sk;
+	struct sk_buff_t *skb;
+	
+	/* check socket state */
+	if (sock->state != SS_UNCONNECTED)
+		return -EINVAL; 
+	if (!(sock->flags & SO_ACCEPTCON)) 
+		return -EINVAL;
+	if (sock->type != SOCK_STREAM)
+		return -EOPNOTSUPP;
+	if (sk->state != TCP_LISTEN)
+		return -EINVAL;
+		
+	for (;;) {
+		/* wait for a message */
+		skb = skb_dequeue(&sk->receive_queue);
+		if (!skb) {
+			/* non blocking */
+			if (flags & O_NONBLOCK)
+				return -EAGAIN;
+
+			/* sleep */
+			task_sleep(sk->sleep);
+
+			/* handle signals */
+			if (signal_pending(current_task))
+				return -ERESTARTSYS;
+
+			continue;
+		}
+
+		/* not a SYN message */
+		if (!(UNIXCB(skb).attr & MSG_SYN)) {
+			tsk = skb->sk;
+			tsk->state_change(tsk);
+			skb_free(skb);
+			continue;
+		}
+
+		/* done : free socket buffer and wake up eventual processes */
+		tsk = skb->sk;
+		if (sk->max_ack_backlog == sk->ack_backlog--)
+			task_wakeup_all(&unix_ack_wqueue);
+
+		skb_free(skb);
+		break;
+	}
+
+
+	/* attach accepted sock to socket */
+	newsock->state = SS_CONNECTED;
+	newsock->sk = tsk;
+	tsk->sleep = newsk->sleep;
+	tsk->socket = newsock;
+
+	/* destroy handed sock */
+	newsk->socket = NULL;
+	unix_destroy_socket(newsk);
+
+	return 0;
 }
 
 /*
@@ -551,6 +782,107 @@ static int unix_dgram_recvmsg(struct socket_t *sock, struct msghdr_t *msg, size_
 	skb_free(skb);
 
 	return err ? err : (int) size;
+}
+
+/*
+ * Receive a message.
+ */
+static int unix_stream_recvmsg(struct socket_t *sock, struct msghdr_t *msg, size_t len, int flags)
+{
+	struct sockaddr_un *sunaddr = msg->msg_name;
+	size_t chunk, copied = 0, target = 1;
+	struct sock_t *sk = sock->sk;
+	struct sk_buff_t *skb;
+	int err;
+
+	/* check flags */
+	if (sock->flags & SO_ACCEPTCON) 
+		return -EINVAL;
+	if (flags & MSG_OOB)
+		return -EOPNOTSUPP;
+	if (flags & MSG_WAITALL)
+		target = len;
+		
+	/* reset source address */
+	msg->msg_namelen = 0;
+
+	/* read */
+	while (len) {
+		/* wait for a message */
+		skb = skb_dequeue(&sk->receive_queue);
+		if (!skb) {
+			/* end */
+			if (copied >= target)
+				break;
+
+			/* handle error */
+			if (sk->err)
+				return sock_error(sk);
+
+			/* handle shutdown */
+			if (sk->shutdown & RCV_SHUTDOWN)
+				break;
+
+			/* non blocking */
+			if (flags & MSG_DONTWAIT)
+				return -EAGAIN;
+
+			/* sleep */
+			unix_data_wait(sk);
+		
+			/* handle signals */
+			if (signal_pending(current_task))
+				return -ERESTARTSYS;
+
+			continue;
+		}
+
+		/* copy address */
+		if (sunaddr) {
+			msg->msg_namelen = sizeof(short);
+			if (skb->sk->protinfo.af_unix.addr) {
+				msg->msg_namelen = skb->sk->protinfo.af_unix.addr->len;
+				memcpy(sunaddr, skb->sk->protinfo.af_unix.addr->name, skb->sk->protinfo.af_unix.addr->len);
+			}
+
+			/* copy address just once */
+			sunaddr = NULL;
+		}
+
+		/* choose size to receive */
+		chunk = skb->len <= len ? skb->len : len;
+
+		/* copy skb data to message */
+		err = memcpy_toiovec(msg->msg_iov, skb->data, chunk);
+		if (err) {
+			skb_queue_head(&sk->receive_queue, skb);
+			return copied ? (int) copied : -EFAULT;
+		}
+
+		/* update sizes */
+		copied += chunk;
+		len -= chunk;
+
+		/* put message back and return */
+		if (flags & MSG_PEEK) {
+			skb_queue_head(&sk->receive_queue, skb);
+			break;
+		}
+
+		/* mark read part of skb as used */
+		skb_pull(skb, chunk);
+
+		/* put the skb back if we didn't use it up */
+		if (skb->len) {
+			skb_queue_head(&sk->receive_queue, skb);
+			break;
+		}
+
+		/* else free skb */
+		skb_free(skb);
+	}
+
+	return copied;
 }
 
 /*
@@ -676,6 +1008,68 @@ err_free:
 }
 
 /*
+ * Send a message.
+ */
+static int unix_stream_sendmsg(struct socket_t *sock, struct msghdr_t *msg, size_t len)
+{
+	struct sock_t *sk = sock->sk;
+	struct sk_buff_t *skb;
+	unix_socket_t *other;
+	int err;
+
+	/* check flags */
+	if (sock->flags & SO_ACCEPTCON) 
+		return -EINVAL;
+	if (msg->msg_flags & MSG_OOB)
+		return -EOPNOTSUPP;
+	if (msg->msg_flags & ~(MSG_DONTWAIT | MSG_NOSIGNAL))
+		return -EINVAL;
+
+	/* destination address should be NULL */
+	if (msg->msg_namelen)
+		return sk->state == TCP_ESTABLISHED ? -EISCONN : -EOPNOTSUPP;
+	
+	/* check connection */
+	if (!unix_peer(sk))
+		return -ENOTCONN;
+
+	/* handle shutdown */
+	if (sk->shutdown & SEND_SHUTDOWN) {
+		if (!(msg->msg_flags & MSG_NOSIGNAL))
+			task_signal(current_task->pid, SIGPIPE);
+		return -EPIPE;
+	}
+
+	/* create a socket buffer */
+	skb = sock_alloc_send_skb(sk, len, msg->msg_flags & MSG_DONTWAIT, &err);
+	if (!skb)
+		return err;
+	
+	/* copy message to socket buffer */
+	err = memcpy_fromiovec(skb_put(skb, len), msg->msg_iov, len);
+	if (err) {
+		skb_free(skb);
+		return -EFAULT;
+	}
+
+	/* check end point */
+	other = unix_peer(sk);
+	if (other->dead || (sk->shutdown & SEND_SHUTDOWN)) {
+		skb_free(skb);
+
+		if (!(msg->msg_flags & MSG_NOSIGNAL))
+			task_signal(current_task->pid, SIGPIPE);
+		return -EPIPE;
+	}
+
+	/* queue message in other socket */
+	skb_queue_tail(&other->receive_queue, skb);
+	other->data_ready(other, len);
+	
+	return len;
+}
+
+/*
  * UNIX datagram protocol operations.
  */
 static struct proto_ops_t unix_dgram_ops = {
@@ -689,6 +1083,22 @@ static struct proto_ops_t unix_dgram_ops = {
 	.accept			= unix_dgram_accept,
 	.recvmsg		= unix_dgram_recvmsg,
 	.sendmsg		= unix_dgram_sendmsg,
+};
+
+/*
+ * UNIX stream protocol operations.
+ */
+static struct proto_ops_t unix_stream_ops = {
+	.family			= AF_UNIX,
+	.dup			= unix_dup,
+	.release		= unix_release,
+	.getname		= unix_getname,
+	.bind			= unix_bind,
+	.connect		= unix_stream_connect,
+	.listen			= unix_stream_listen,
+	.accept			= unix_stream_accept,
+	.recvmsg		= unix_stream_recvmsg,
+	.sendmsg		= unix_stream_sendmsg,
 };
 
 /*
@@ -728,6 +1138,9 @@ int unix_create(struct socket_t *sock, int protocol)
 
 	/* check socket type */
 	switch(sock->type) {
+		case SOCK_STREAM:
+			sock->ops = &unix_stream_ops;
+			break;
 		case SOCK_DGRAM:
 			sock->ops = &unix_dgram_ops;
 			break;

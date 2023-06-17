@@ -4,8 +4,16 @@
 #include <net/sock.h>
 
 #define UNIX_PATH_MAX		108
+#define UNIXCB(skb) 		(*(struct unix_skb_parms_t *)&((skb)->cb))
 
 typedef struct sock_t unix_socket_t;				/* unix socket = generic sock */
+
+/*
+ * Socket buffer parameters.
+ */
+struct unix_skb_parms_t {
+	uint32_t	attr;					/* special attributes */
+};
 
 /*
  * UNIX socket address.

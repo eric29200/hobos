@@ -156,7 +156,7 @@ static int sock_read(struct file_t *filp, char *buf, int len)
 	iov.iov_base = buf;
 	iov.iov_len = len;
 
-	return sock->ops->recvmsg(sock, &msg, len, filp->f_flags & O_NONBLOCK ? 0 : MSG_DONTWAIT);
+	return sock->ops->recvmsg(sock, &msg, len, !(filp->f_flags & O_NONBLOCK) ? 0 : MSG_DONTWAIT);
 }
 
 /*

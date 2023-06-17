@@ -20,6 +20,7 @@ struct sk_buff_t {
 	union {							/* transport layer header */
 		uint8_t *		raw;
 	} h;
+	char				cb[48];			/* private parameters */
 	size_t				users;			/* users count */
 	int				datarefp;		/* reference count */
 	char				is_clone;		/* we are clone */
