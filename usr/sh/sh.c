@@ -103,7 +103,7 @@ static void sigchld_handler()
 	for (;;) {
 		/* get terminated process */
 		pid = waitpid(-1, &status, WNOHANG);
-		if (pid < 0)
+		if (pid <= 0)
 			break;
 
 		/* free matching job */
